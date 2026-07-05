@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { is } from '@electron-toolkit/utils'
 import { Recorder } from './recorder'
-import { IpcChannel, type RecordingState } from '../shared/ipc'
+import { IpcChannel, type CaptureTarget, type RecordingState } from '../shared/ipc'
 
 /** 원본 영상 파일을 렌더러 미리보기에 안전하게 공급하는 커스텀 스킴. */
 const MEDIA_SCHEME = 'devscreen-media'
@@ -61,23 +61,29 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle(IpcChannel.Start, async () => {
+  ipcMain.handle(IpcChannel.ListTargets, async () => {
+    return recorder.listTargets()
+  })
+
+  ipcMain.handle(IpcChannel.Start, async (_e, targetId: string) => {
     if (recorder.isRecording) return
 
     // 이벤트마다 상태를 밀면 마우스 이동에서 폭주하므로 카운트 갱신은 스로틀한다.
     let lastPush = 0
     let startedAt = 0
+    let target: CaptureTarget
 
-    await recorder.start({
+    await recorder.start(targetId, {
       onReady: (info) => {
         startedAt = info.startedAt
-        sendState({ status: 'recording', startedAt, eventCount: 0 })
+        target = info.target
+        sendState({ status: 'recording', startedAt, eventCount: 0, target })
       },
       onEvent: (count) => {
         const now = Date.now()
         if (now - lastPush < 400) return
         lastPush = now
-        sendState({ status: 'recording', startedAt, eventCount: count })
+        sendState({ status: 'recording', startedAt, eventCount: count, target })
       },
       onError: (code, message) => {
         sendState({ status: 'error', code, message })
@@ -88,7 +94,8 @@ function registerIpc(): void {
           videoUrl: mediaUrl(result.videoPath),
           folder: result.folder,
           durationMs: result.durationMs,
-          eventCount: result.eventCount
+          eventCount: result.eventCount,
+          target: result.target
         })
       }
     })

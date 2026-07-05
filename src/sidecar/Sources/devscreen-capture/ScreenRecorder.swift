@@ -2,7 +2,7 @@ import AVFoundation
 import CoreMedia
 import ScreenCaptureKit
 
-/// ScreenCaptureKit으로 전체 화면 원본을 mp4로 기록한다.
+/// ScreenCaptureKit으로 선택된 대상(전체 화면 또는 특정 창) 원본을 mp4로 기록한다.
 /// 효과 로직 없음 — 원본 프레임을 그대로 파일에 쓰기만 한다 (ADR 0001의 불변층).
 final class ScreenRecorder: NSObject, SCStreamOutput {
     private let outputURL: URL
@@ -19,9 +19,10 @@ final class ScreenRecorder: NSObject, SCStreamOutput {
         self.outputURL = outputURL
     }
 
-    /// 권한·디스플레이를 확인하고 캡처를 시작한다.
-    /// 성공하면 onReady, 권한/디스플레이/캡처 실패면 onError를 호출한다.
-    func start(onReady: @escaping () -> Void,
+    /// 권한을 확인하고 지정한 대상의 캡처를 시작한다.
+    /// 성공하면 해석된 대상과 함께 onReady, 실패면 onError를 호출한다.
+    func start(targetId: String,
+               onReady: @escaping (_ target: ResolvedTarget) -> Void,
                onError: @escaping (_ code: String, _ message: String) -> Void) {
         SCShareableContent.getWithCompletionHandler { [weak self] content, error in
             guard let self else { return }
@@ -32,26 +33,31 @@ final class ScreenRecorder: NSObject, SCStreamOutput {
                         "화면 녹화 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 화면 기록에서 허용하세요. (\(error.localizedDescription))")
                 return
             }
-            guard let display = content?.displays.first else {
-                onError("no-display", "캡처할 디스플레이를 찾지 못했습니다.")
+            guard let content else {
+                onError("no-display", "캡처할 대상을 조회하지 못했습니다.")
+                return
+            }
+            guard let target = CaptureTargets.resolve(id: targetId, content: content) else {
+                onError("target-not-found",
+                        "선택한 대상(\(targetId))을 찾지 못했습니다. 창이 닫혔을 수 있습니다.")
                 return
             }
 
             do {
-                try self.beginCapture(display: display)
-                onReady()
+                try self.beginCapture(target: target)
+                onReady(target)
             } catch {
                 onError("capture-failed", "캡처 시작 실패: \(error.localizedDescription)")
             }
         }
     }
 
-    private func beginCapture(display: SCDisplay) throws {
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+    private func beginCapture(target: ResolvedTarget) throws {
+        let filter = target.filter
 
         let config = SCStreamConfiguration()
-        config.width = display.width * 2   // Retina 2x (SPEC: Retina 2x 원본)
-        config.height = display.height * 2
+        config.width = target.widthPx    // Retina 2x (SPEC: Retina 2x 원본)
+        config.height = target.heightPx
         config.minimumFrameInterval = CMTime(value: 1, timescale: 60) // 60fps
         config.showsCursor = false          // 시스템 커서 제외, 렌더링 때 다시 그림
         config.pixelFormat = kCVPixelFormatType_32BGRA

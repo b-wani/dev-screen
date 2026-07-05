@@ -43,6 +43,18 @@ body {
   margin: 0;
 }
 
+.target-select {
+  width: 100%;
+  max-width: 460px;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #3a3a3c;
+  background: #2c2c2e;
+  color: #f2f2f7;
+  cursor: pointer;
+}
+
 .btn {
   font-size: 15px;
   font-weight: 600;
