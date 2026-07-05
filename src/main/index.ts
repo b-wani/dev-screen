@@ -1,10 +1,16 @@
-import { app, shell, BrowserWindow, ipcMain, protocol, net } from 'electron'
+import { app, shell, clipboard, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { writeFile } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Recorder } from './recorder'
 import { listRecordings, loadRecording, saveRecipe } from './storage'
-import { IpcChannel, type RecordingState, type RecordingSummary } from '../shared/ipc'
+import {
+  IpcChannel,
+  type RecordingState,
+  type RecordingSummary,
+  type ExportSaveResult
+} from '../shared/ipc'
 import type { RenderRecipe } from '../shared/recipe'
 
 /** 원본 영상 파일을 렌더러 미리보기에 안전하게 공급하는 커스텀 스킴. */
@@ -126,13 +132,40 @@ function registerIpc(): void {
       ...(loaded.recipe ? { recipe: loaded.recipe } : {})
     })
   })
+
+  // 렌더러가 WebCodecs로 인코딩한 MP4 바이트를 녹화 폴더에 저장한다(export.mp4).
+  ipcMain.handle(
+    IpcChannel.ExportSave,
+    async (_e, bytes: ArrayBuffer, folder: string): Promise<ExportSaveResult> => {
+      const path = join(folder, 'export.mp4')
+      const buffer = Buffer.from(bytes)
+      await writeFile(path, buffer)
+      return { path, sizeBytes: buffer.byteLength }
+    }
+  )
+
+  ipcMain.handle(IpcChannel.ExportReveal, (_e, path: string) => {
+    shell.showItemInFolder(path)
+  })
+
+  ipcMain.handle(IpcChannel.ExportCopyPath, (_e, path: string) => {
+    clipboard.writeText(path)
+  })
 }
 
 app.whenReady().then(() => {
-  protocol.handle(MEDIA_SCHEME, (request) => {
+  protocol.handle(MEDIA_SCHEME, async (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))
-    return net.fetch(pathToFileURL(filePath).toString())
+    // 원본 요청(메서드·Range 헤더)을 그대로 파일 URL로 넘겨 시크(range)를 지원한다.
+    const res = await net.fetch(pathToFileURL(filePath).toString(), {
+      method: request.method,
+      headers: request.headers
+    })
+    // 커스텀 스킴은 렌더러와 교차 출처라, 익스포트 시 캔버스가 오염되지 않도록 CORS를 연다.
+    const headers = new Headers(res.headers)
+    headers.set('Access-Control-Allow-Origin', '*')
+    return new Response(res.body, { status: res.status, statusText: res.statusText, headers })
   })
 
   registerIpc()

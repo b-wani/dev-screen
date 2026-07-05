@@ -1,5 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IpcChannel, type RecordingState, type RecordingSummary } from '../shared/ipc'
+import {
+  IpcChannel,
+  type RecordingState,
+  type RecordingSummary,
+  type ExportSaveResult
+} from '../shared/ipc'
 import type { RenderRecipe } from '../shared/recipe'
 
 /** 렌더러에 노출되는 안전한 API 표면. */
@@ -19,7 +24,16 @@ const api = {
   listRecordings: (): Promise<RecordingSummary[]> => ipcRenderer.invoke(IpcChannel.ListRecordings),
   /** 저장된 녹화를 다시 연다. 결과는 onStateChange로 미리보기 상태가 온다. */
   openRecording: (folder: string): Promise<void> =>
-    ipcRenderer.invoke(IpcChannel.OpenRecording, folder)
+    ipcRenderer.invoke(IpcChannel.OpenRecording, folder),
+  /** 익스포트된 MP4 바이트를 녹화 폴더에 저장하고 경로·용량을 돌려받는다. */
+  saveExport: (bytes: ArrayBuffer, folder: string): Promise<ExportSaveResult> =>
+    ipcRenderer.invoke(IpcChannel.ExportSave, bytes, folder),
+  /** 저장된 파일을 Finder에서 연다. */
+  revealExport: (path: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.ExportReveal, path),
+  /** 저장된 파일 경로를 클립보드에 복사한다. */
+  copyExportPath: (path: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.ExportCopyPath, path)
 }
 
 contextBridge.exposeInMainWorld('devScreen', api)

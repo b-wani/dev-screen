@@ -6,7 +6,20 @@
  * 왕복(직렬화 → 파싱) 후 sampleRecipe 출력이 동일해야 한다 (recipe.persist.test).
  */
 
-import type { PanKeyframe, RenderRecipe, ZoomSegment } from './recipe'
+import type { CursorKind } from './event-track'
+import type {
+  BackgroundStyle,
+  BadgeConfig,
+  ClickMark,
+  CursorKeyframe,
+  CursorTrack,
+  PanKeyframe,
+  RenderRecipe,
+  Trim,
+  ZoomSegment
+} from './recipe'
+
+const CURSOR_KINDS: readonly CursorKind[] = ['arrow', 'pointer', 'ibeam']
 
 /** 저장 포맷 버전. 호환 불가능한 레시피 스키마 변경 시 올린다. */
 export const RECIPE_FORMAT_VERSION = 1
@@ -58,8 +71,62 @@ function validateRecipe(raw: unknown): RenderRecipe {
     source: { width: source.width, height: source.height },
     zoomScale: r.zoomScale,
     durationMs: r.durationMs,
-    zoomSegments: r.zoomSegments.map(validateSegment)
+    zoomSegments: r.zoomSegments.map(validateSegment),
+    cursor: validateCursor(r.cursor),
+    trim: validateTrim(r.trim),
+    background: validateBackground(r.background),
+    badge: validateBadge(r.badge)
   }
+}
+
+function validateCursor(raw: unknown): CursorTrack {
+  const c = asObject(raw, 'recipe.cursor')
+  if (!Array.isArray(c.keyframes)) throw new RecipeParseError('recipe.cursor.keyframes 누락')
+  if (!Array.isArray(c.clicks)) throw new RecipeParseError('recipe.cursor.clicks 누락')
+  return {
+    keyframes: c.keyframes.map(validateCursorKeyframe),
+    clicks: c.clicks.map(validateClickMark)
+  }
+}
+
+function validateCursorKeyframe(raw: unknown): CursorKeyframe {
+  const k = asObject(raw, 'cursorKeyframe')
+  if (!isNum(k.t) || !isNum(k.x) || !isNum(k.y)) {
+    throw new RecipeParseError('cursorKeyframe: t/x/y 누락')
+  }
+  if (!isCursorKind(k.cursor)) throw new RecipeParseError('cursorKeyframe: cursor 종류 불명')
+  return { t: k.t, x: k.x, y: k.y, cursor: k.cursor }
+}
+
+function validateClickMark(raw: unknown): ClickMark {
+  const c = asObject(raw, 'clickMark')
+  if (!isNum(c.t) || !isNum(c.x) || !isNum(c.y)) {
+    throw new RecipeParseError('clickMark: t/x/y 누락')
+  }
+  return { t: c.t, x: c.x, y: c.y }
+}
+
+function validateTrim(raw: unknown): Trim {
+  const t = asObject(raw, 'recipe.trim')
+  if (!isNum(t.startMs) || !isNum(t.endMs)) throw new RecipeParseError('recipe.trim: startMs/endMs 누락')
+  return { startMs: t.startMs, endMs: t.endMs }
+}
+
+function validateBackground(raw: unknown): BackgroundStyle {
+  const b = asObject(raw, 'recipe.background')
+  if (typeof b.color !== 'string') throw new RecipeParseError('recipe.background.color 누락')
+  if (!isNum(b.padding)) throw new RecipeParseError('recipe.background.padding 누락')
+  return { color: b.color, padding: b.padding }
+}
+
+function validateBadge(raw: unknown): BadgeConfig {
+  const b = asObject(raw, 'recipe.badge')
+  if (typeof b.visible !== 'boolean') throw new RecipeParseError('recipe.badge.visible 누락')
+  return { visible: b.visible }
+}
+
+function isCursorKind(v: unknown): v is CursorKind {
+  return typeof v === 'string' && (CURSOR_KINDS as readonly string[]).includes(v)
 }
 
 function validateSegment(raw: unknown): ZoomSegment {

@@ -27,7 +27,14 @@ const recipe: RenderRecipe = {
   durationMs: 5000,
   zoomSegments: [
     { startMs: 500, fullInAtMs: 1000, holdEndMs: 3000, endMs: 3500, keyframes: [{ t: 1000, x: 400, y: 300 }] }
-  ]
+  ],
+  cursor: {
+    keyframes: [{ t: 1000, x: 400, y: 300, cursor: 'arrow' }],
+    clicks: [{ t: 1000, x: 400, y: 300 }]
+  },
+  trim: { startMs: 250, endMs: 4750 },
+  background: { color: '#1c1c1e', padding: 0.06 },
+  badge: { visible: true }
 }
 
 function manifest(startedAt: number): RecordingManifest {
