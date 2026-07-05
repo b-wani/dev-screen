@@ -4,7 +4,14 @@ import { pathToFileURL } from 'node:url'
 import { writeFile } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Recorder } from './recorder'
-import { IpcChannel, type RecordingState, type ExportSaveResult } from '../shared/ipc'
+import { listRecordings, loadRecording, saveRecipe } from './storage'
+import {
+  IpcChannel,
+  type RecordingState,
+  type RecordingSummary,
+  type ExportSaveResult
+} from '../shared/ipc'
+import type { RenderRecipe } from '../shared/recipe'
 
 /** 원본 영상 파일을 렌더러 미리보기에 안전하게 공급하는 커스텀 스킴. */
 const MEDIA_SCHEME = 'devscreen-media'
@@ -98,6 +105,32 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.Stop, () => {
     recorder.stop()
+  })
+
+  // 렌더러가 유도·편집한 레시피를 녹화 폴더에 저장한다 (편집 상태 영속화).
+  ipcMain.handle(
+    IpcChannel.SaveRecipe,
+    (_e, folder: string, recipe: RenderRecipe) => saveRecipe(folder, recipe)
+  )
+
+  ipcMain.handle(
+    IpcChannel.ListRecordings,
+    (): Promise<RecordingSummary[]> => listRecordings()
+  )
+
+  // 저장된 녹화를 다시 열어 미리보기 상태로 복원한다. 저장된 레시피가 있으면 그대로,
+  // 없으면 렌더러가 이벤트 트랙에서 다시 유도한다.
+  ipcMain.handle(IpcChannel.OpenRecording, async (_e, folder: string) => {
+    const loaded = await loadRecording(folder)
+    sendState({
+      status: 'preview',
+      videoUrl: mediaUrl(loaded.videoPath),
+      folder: loaded.folder,
+      durationMs: loaded.durationMs,
+      eventCount: loaded.eventCount,
+      eventTrack: loaded.eventTrack,
+      ...(loaded.recipe ? { recipe: loaded.recipe } : {})
+    })
   })
 
   // 렌더러가 WebCodecs로 인코딩한 MP4 바이트를 녹화 폴더에 저장한다(export.mp4).

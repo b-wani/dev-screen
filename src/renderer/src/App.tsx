@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RecordingState } from '../../shared/ipc'
+import type { RecordingState, RecordingSummary } from '../../shared/ipc'
 import {
   deriveRecipe,
   sampleComposition,
@@ -41,24 +41,59 @@ export default function App(): JSX.Element {
 
   useEffect(() => window.devScreen.onStateChange(setState), [])
 
+  const goIdle = (): void => setState({ status: 'idle' })
+
   return (
     <main className="app">
       <h1 className="title">dev-screen</h1>
       {state.status === 'idle' && <IdleView />}
       {state.status === 'recording' && <RecordingView state={state} />}
-      {state.status === 'preview' && <PreviewView state={state} />}
+      {state.status === 'preview' && <PreviewView state={state} onExit={goIdle} />}
       {state.status === 'error' && <ErrorView state={state} />}
     </main>
   )
 }
 
+function formatDate(ms: number): string {
+  return new Date(ms).toLocaleString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 function IdleView(): JSX.Element {
+  const [recent, setRecent] = useState<RecordingSummary[]>([])
+
+  // 앱 시작 시 로컬에 저장된 최근 녹화를 불러온다 (재시작 후 다시 열기).
+  useEffect(() => {
+    window.devScreen.listRecordings().then(setRecent)
+  }, [])
+
   return (
     <section className="panel">
       <p className="hint">전체 화면 녹화를 시작합니다.</p>
       <button className="btn btn-record" onClick={() => window.devScreen.start()}>
         ● 녹화 시작
       </button>
+      {recent.length > 0 && (
+        <div className="recent">
+          <h2 className="recent-title">최근 녹화</h2>
+          <ul className="recent-list">
+            {recent.map((r) => (
+              <li key={r.folder}>
+                <button className="recent-item" onClick={() => window.devScreen.openRecording(r.folder)}>
+                  <span className="recent-name">{formatDate(r.startedAt)}</span>
+                  <span className="recent-meta">
+                    {formatElapsed(r.durationMs)} · 이벤트 {r.eventCount}개
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   )
 }
@@ -90,9 +125,11 @@ function RecordingView({
 }
 
 function PreviewView({
-  state
+  state,
+  onExit
 }: {
   state: Extract<RecordingState, { status: 'preview' }>
+  onExit: () => void
 }): JSX.Element {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -102,20 +139,31 @@ function PreviewView({
   const [exportStatus, setExportStatus] = useState<ExportStatus>({ phase: 'idle' })
 
   // RAF 루프·익스포트는 최신 레시피를 ref로 읽는다 — 편집(타임라인·배경/배지)이 다음 프레임에 즉시 반영된다.
+  // 편집 상태는 그대로 녹화 폴더에 저장해 다시 열었을 때 복원되게 한다(이슈 #9 영속화).
   useEffect(() => {
     recipeRef.current = recipe
-  }, [recipe])
+    if (recipe) void window.devScreen.saveRecipe(state.folder, recipe)
+  }, [recipe, state.folder])
 
-  // 영상 메타데이터가 오면(원본 크기 확정) 이벤트 트랙에서 렌더 레시피를 유도한다.
+  // 영상 메타데이터가 오면(원본 크기 확정) 렌더 레시피를 확정한다.
+  // 다시 연 녹화면 저장된 레시피(편집 상태)를 그대로 복원하고, 갓 끝난 녹화면
+  // 이벤트 트랙에서 유도한다(저장은 위 useEffect가 담당한다).
   const handleMetadata = (): void => {
     const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-    const source: FrameSize = { width: video.videoWidth, height: video.videoHeight }
-    canvas.width = source.width
-    canvas.height = source.height
-    // 배경/패딩·배지 기본값은 deriveRecipe가 레시피에 담아 준다(이슈 #8: 레시피에 저장).
-    setRecipe(deriveRecipe(state.eventTrack, { source }))
+
+    let next: RenderRecipe
+    if (state.recipe) {
+      next = state.recipe
+    } else {
+      const source: FrameSize = { width: video.videoWidth, height: video.videoHeight }
+      // 배경/패딩·배지 기본값은 deriveRecipe가 레시피에 담아 준다(이슈 #8: 레시피에 저장).
+      next = deriveRecipe(state.eventTrack, { source })
+    }
+    canvas.width = next.source.width
+    canvas.height = next.source.height
+    setRecipe(next)
   }
 
   // 재생 루프: 트림 창 안에서만 반복 재생하고, 매 프레임 합성 파라미터를 샘플링해 그대로 그린다.
@@ -251,9 +299,14 @@ function PreviewView({
         </div>
       </dl>
       <ExportPanel status={exportStatus} onExport={handleExport} />
-      <button className="btn btn-record" onClick={() => window.devScreen.start()}>
-        ● 다시 녹화
-      </button>
+      <div className="preview-actions">
+        <button className="btn" onClick={onExit}>
+          ← 목록
+        </button>
+        <button className="btn btn-record" onClick={() => window.devScreen.start()}>
+          ● 다시 녹화
+        </button>
+      </div>
     </section>
   )
 }

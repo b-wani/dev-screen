@@ -99,6 +99,63 @@ body {
   color: #ff453a;
 }
 
+.recent {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.recent-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8e8e93;
+  margin: 0 0 10px;
+}
+
+.recent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recent-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #2c2c2e;
+  color: #f2f2f7;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recent-item:hover {
+  background: #3a3a3c;
+}
+
+.recent-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.recent-meta {
+  font-size: 12px;
+  color: #8e8e93;
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
 .preview {
   align-items: stretch;
 }
