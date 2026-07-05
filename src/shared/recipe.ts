@@ -73,8 +73,17 @@ export interface CursorTrack {
 }
 
 /**
- * 렌더 레시피 — 녹화를 최종 영상으로 합성하는 파라미터. 이 슬라이스는 자동 줌 + 팬 + 커서를 다룬다.
- * (트림·배경/패딩 스타일은 이후 슬라이스에서 이 레시피에 더해진다.)
+ * 트림 구간 — 최종 영상으로 남길 원본의 시간 범위(ms). 앞뒤 트리밍은 이 창을 좁힌다.
+ * 원본 좌표계 기준이며, 창 밖 구간은 샘플링·미리보기·익스포트에서 제외된다.
+ */
+export interface Trim {
+  startMs: number
+  endMs: number
+}
+
+/**
+ * 렌더 레시피 — 녹화를 최종 영상으로 합성하는 파라미터. 이 슬라이스는 자동 줌 + 팬 + 커서 + 트림을 다룬다.
+ * (배경/패딩 스타일은 이후 슬라이스에서 이 레시피에 더해진다.)
  */
 export interface RenderRecipe {
   source: FrameSize
@@ -84,6 +93,8 @@ export interface RenderRecipe {
   zoomSegments: ZoomSegment[]
   /** 커서 스무딩·클릭 하이라이트의 입력. */
   cursor: CursorTrack
+  /** 최종 영상으로 남길 원본 시간 범위. 기본은 전 구간 [0, durationMs]. */
+  trim: Trim
 }
 
 /** 시각 t에서의 카메라 상태 — 미리보기 층이 그대로 그린다. */
@@ -211,7 +222,8 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
     zoomScale,
     durationMs: track.durationMs,
     zoomSegments,
-    cursor
+    cursor,
+    trim: { startMs: 0, endMs: track.durationMs }
   }
 }
 
@@ -242,6 +254,9 @@ function panKeyframes(group: MouseSample[], scale: number, source: FrameSize): P
  * 이징으로 잇고, 프레임을 벗어나지 않게 중심을 클램핑한다(SPEC 3).
  */
 export function sampleRecipe(recipe: RenderRecipe, t: number): CameraTransform {
+  // 트림 창 밖의 시각은 최종 영상에 존재하지 않는다 — 원본 그대로로 되돌린다.
+  if (t < recipe.trim.startMs || t > recipe.trim.endMs) return neutral(recipe.source)
+
   const seg = recipe.zoomSegments.find((s) => t >= s.startMs && t <= s.endMs)
   if (!seg) return neutral(recipe.source)
 
@@ -274,6 +289,10 @@ export function sampleRecipe(recipe: RenderRecipe, t: number): CameraTransform {
  * 카메라 변환 + 스무딩된 커서 + (있다면) 클릭 하이라이트. 계산은 전부 여기(순수 층)에서 한다.
  */
 export function sampleFrame(recipe: RenderRecipe, t: number): FrameSample {
+  // 트림 창 밖의 시각은 최종 영상에 존재하지 않는다 — 카메라·커서·클릭 모두 비운다.
+  if (t < recipe.trim.startMs || t > recipe.trim.endMs) {
+    return { camera: neutral(recipe.source), cursor: null, click: null }
+  }
   return {
     camera: sampleRecipe(recipe, t),
     cursor: sampleCursor(recipe.cursor, t),
