@@ -60,10 +60,8 @@ describe('경량 편집: 줌 구간 이동', () => {
     expect(seg.fullInAtMs).toBe(2000)
     expect(seg.holdEndMs).toBe(5500)
     expect(seg.endMs).toBe(6000)
-    expect(seg.keyframes).toEqual([
-      { t: 2000, x: 400, y: 300 },
-      { t: 3500, x: 420, y: 310 }
-    ])
+    // 둘째 클릭(420,310)은 첫 클릭 뷰 안이라 팬 키프레임이 없다 — 유일한 키프레임 시각도 함께 밀린다.
+    expect(seg.keyframes).toEqual([{ t: 2000, x: 400, y: 300 }])
   })
 
   it('앞으로 넘치게 밀면 startMs 0에서 멈춘다', () => {
