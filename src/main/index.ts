@@ -12,6 +12,7 @@ import {
   type ExportSaveResult
 } from '../shared/ipc'
 import type { RenderRecipe } from '../shared/recipe'
+import type { ExportFormat } from '../shared/export-preset'
 
 /** 원본 영상 파일을 렌더러 미리보기에 안전하게 공급하는 커스텀 스킴. */
 const MEDIA_SCHEME = 'devscreen-media'
@@ -133,11 +134,16 @@ function registerIpc(): void {
     })
   })
 
-  // 렌더러가 WebCodecs로 인코딩한 MP4 바이트를 녹화 폴더에 저장한다(export.mp4).
+  // 렌더러가 인코딩한 익스포트 바이트를 녹화 폴더에 저장한다(export.mp4 / export.gif).
   ipcMain.handle(
     IpcChannel.ExportSave,
-    async (_e, bytes: ArrayBuffer, folder: string): Promise<ExportSaveResult> => {
-      const path = join(folder, 'export.mp4')
+    async (
+      _e,
+      bytes: ArrayBuffer,
+      folder: string,
+      format: ExportFormat
+    ): Promise<ExportSaveResult> => {
+      const path = join(folder, `export.${format}`)
       const buffer = Buffer.from(bytes)
       await writeFile(path, buffer)
       return { path, sizeBytes: buffer.byteLength }

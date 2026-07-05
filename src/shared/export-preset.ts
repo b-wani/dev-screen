@@ -10,6 +10,9 @@
 
 import type { FrameSize } from './recipe'
 
+/** 익스포트 출력 포맷. 같은 프리셋을 공유하되 목적지 제한만 다르다(영상 100MB / 이미지·GIF 10MB). */
+export type ExportFormat = 'mp4' | 'gif'
+
 export interface ExportPreset {
   id: string
   container: 'mp4'
@@ -22,9 +25,20 @@ export interface ExportPreset {
   maxSizeBytes: number
   /** 목표 비트레이트 상한(bps). 짧은 영상이 용량 예산을 다 못 써도 과하게 커지지 않게 캡. */
   maxBitrate: number
+  /** GIF 출력 세로 상한(px). GIF는 용량이 커 MP4보다 작게 잡는다. */
+  gifMaxHeight: number
+  /** GIF 프레임레이트. 팔레트·LZW 특성상 MP4보다 낮게 잡아 용량을 억제한다. */
+  gifFps: number
+  /** GIF 결과 파일 용량 상한(bytes). 초과하면 경고한다(이미지 첨부 제한 타겟). */
+  gifMaxSizeBytes: number
+  /** GIF 팔레트 최대 색상 수(≤256). */
+  gifMaxColors: number
 }
 
-/** GitHub 프리셋: 100MB 이내, 최대 1080p, H.264 60fps (SPEC 익스포트). v1 유일 프리셋. */
+/**
+ * GitHub 프리셋: 영상 100MB(최대 1080p, H.264 60fps) · GIF 10MB(최대 480p, 15fps) (SPEC 익스포트).
+ * v1 유일 프리셋 — 하나의 프리셋이 목적지 제한(영상/이미지)을 모두 담는다.
+ */
 export const GITHUB_PRESET: ExportPreset = {
   id: 'github',
   container: 'mp4',
@@ -32,7 +46,11 @@ export const GITHUB_PRESET: ExportPreset = {
   maxHeight: 1080,
   fps: 60,
   maxSizeBytes: 100 * 1024 * 1024,
-  maxBitrate: 12_000_000
+  maxBitrate: 12_000_000,
+  gifMaxHeight: 480,
+  gifFps: 15,
+  gifMaxSizeBytes: 10 * 1024 * 1024,
+  gifMaxColors: 256
 }
 
 /** 인코더에 넘길 확정 설정 — resolveEncodeConfig의 출력. */
@@ -79,7 +97,39 @@ export function resolveEncodeConfig(
   return { width, height, fps: preset.fps, codec: preset.codec, bitrate }
 }
 
-/** 결과 파일이 프리셋 용량 상한을 초과하는지. UI 경고 판단에 쓴다(AC4). */
-export function exceedsSizeLimit(preset: ExportPreset, sizeBytes: number): boolean {
-  return sizeBytes > preset.maxSizeBytes
+/** GIF 인코더에 넘길 확정 설정 — resolveGifConfig의 출력. */
+export interface GifConfig {
+  /** 출력 가로(px). GIF는 짝수 제약이 없다. */
+  width: number
+  /** 출력 세로(px). */
+  height: number
+  fps: number
+  /** 팔레트 최대 색상 수. */
+  maxColors: number
+}
+
+/**
+ * 프리셋·원본 크기로부터 GIF 인코딩 설정을 계산한다(순수).
+ * - 해상도: 원본을 gifMaxHeight 이하로 비율 유지 축소(원본보다 키우지 않음).
+ * - 비트레이트 개념이 없어 길이는 쓰지 않는다(용량은 해상도·fps·프레임 수로 결정된다).
+ */
+export function resolveGifConfig(preset: ExportPreset, source: FrameSize): GifConfig {
+  const scale = Math.min(1, preset.gifMaxHeight / source.height)
+  const width = Math.max(1, Math.round(source.width * scale))
+  const height = Math.max(1, Math.round(source.height * scale))
+  return { width, height, fps: preset.gifFps, maxColors: preset.gifMaxColors }
+}
+
+/** 포맷별 용량 상한(bytes). 영상은 maxSizeBytes, GIF는 gifMaxSizeBytes. */
+export function sizeLimitBytes(preset: ExportPreset, format: ExportFormat): number {
+  return format === 'gif' ? preset.gifMaxSizeBytes : preset.maxSizeBytes
+}
+
+/** 결과 파일이 포맷별 용량 상한을 초과하는지. UI 경고 판단에 쓴다(AC4). */
+export function exceedsSizeLimit(
+  preset: ExportPreset,
+  sizeBytes: number,
+  format: ExportFormat = 'mp4'
+): boolean {
+  return sizeBytes > sizeLimitBytes(preset, format)
 }

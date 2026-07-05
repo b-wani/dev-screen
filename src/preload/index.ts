@@ -6,6 +6,7 @@ import {
   type ExportSaveResult
 } from '../shared/ipc'
 import type { RenderRecipe } from '../shared/recipe'
+import type { ExportFormat } from '../shared/export-preset'
 
 /** 렌더러에 노출되는 안전한 API 표면. */
 const api = {
@@ -25,9 +26,12 @@ const api = {
   /** 저장된 녹화를 다시 연다. 결과는 onStateChange로 미리보기 상태가 온다. */
   openRecording: (folder: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannel.OpenRecording, folder),
-  /** 익스포트된 MP4 바이트를 녹화 폴더에 저장하고 경로·용량을 돌려받는다. */
-  saveExport: (bytes: ArrayBuffer, folder: string): Promise<ExportSaveResult> =>
-    ipcRenderer.invoke(IpcChannel.ExportSave, bytes, folder),
+  /** 익스포트된 바이트를 포맷에 맞춰 녹화 폴더에 저장하고 경로·용량을 돌려받는다. */
+  saveExport: (
+    bytes: ArrayBuffer,
+    folder: string,
+    format: ExportFormat
+  ): Promise<ExportSaveResult> => ipcRenderer.invoke(IpcChannel.ExportSave, bytes, folder, format),
   /** 저장된 파일을 Finder에서 연다. */
   revealExport: (path: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannel.ExportReveal, path),

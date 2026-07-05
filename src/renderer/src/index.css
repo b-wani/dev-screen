@@ -350,6 +350,27 @@ body {
   word-break: break-all;
 }
 
+.btn-export {
+  background: #0a84ff;
+  color: white;
+}
+
+.export-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.export-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.export-warn {
+  color: #ff9f0a;
+}
+
 .error {
   text-align: center;
 }

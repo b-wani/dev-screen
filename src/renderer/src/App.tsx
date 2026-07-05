@@ -15,8 +15,8 @@ import {
   type ZoomEdge
 } from '../../shared/recipe.edit'
 import { drawComposition } from './compose'
-import { GITHUB_PRESET, exceedsSizeLimit } from '../../shared/export-preset'
-import { renderRecipeToMp4 } from './export'
+import { GITHUB_PRESET, exceedsSizeLimit, type ExportFormat } from '../../shared/export-preset'
+import { renderRecipeToMp4, renderRecipeToGif } from './export'
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -32,8 +32,8 @@ function formatMB(bytes: number): string {
 /** 익스포트 진행 상태. 미리보기 패널의 하단 액션을 이 상태만 보고 그린다. */
 type ExportStatus =
   | { phase: 'idle' }
-  | { phase: 'encoding'; renderedFrames: number; totalFrames: number }
-  | { phase: 'done'; path: string; sizeBytes: number; exceedsLimit: boolean }
+  | { phase: 'encoding'; format: ExportFormat; renderedFrames: number; totalFrames: number }
+  | { phase: 'done'; format: ExportFormat; path: string; sizeBytes: number; exceedsLimit: boolean }
   | { phase: 'error'; message: string }
 
 export default function App(): JSX.Element {
@@ -190,22 +190,24 @@ function PreviewView({
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // 익스포트: 미리보기와 동일한 레시피로 원본을 인코딩(WebCodecs)해 폴더에 MP4로 저장한다.
-  const handleExport = async (): Promise<void> => {
+  // 익스포트: 미리보기와 동일한 레시피로 원본을 인코딩해 폴더에 저장한다(MP4/GIF 선택).
+  const handleExport = async (format: ExportFormat): Promise<void> => {
     const video = videoRef.current
     const recipe = recipeRef.current
     if (!video || !recipe) return
-    setExportStatus({ phase: 'encoding', renderedFrames: 0, totalFrames: 0 })
+    setExportStatus({ phase: 'encoding', format, renderedFrames: 0, totalFrames: 0 })
     try {
-      const bytes = await renderRecipeToMp4(video, recipe, GITHUB_PRESET, (p) =>
-        setExportStatus({ phase: 'encoding', ...p })
+      const render = format === 'gif' ? renderRecipeToGif : renderRecipeToMp4
+      const bytes = await render(video, recipe, GITHUB_PRESET, (p) =>
+        setExportStatus({ phase: 'encoding', format, ...p })
       )
-      const { path, sizeBytes } = await window.devScreen.saveExport(bytes, state.folder)
+      const { path, sizeBytes } = await window.devScreen.saveExport(bytes, state.folder, format)
       setExportStatus({
         phase: 'done',
+        format,
         path,
         sizeBytes,
-        exceedsLimit: exceedsSizeLimit(GITHUB_PRESET, sizeBytes)
+        exceedsLimit: exceedsSizeLimit(GITHUB_PRESET, sizeBytes, format)
       })
     } catch (err) {
       setExportStatus({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -311,27 +313,36 @@ function PreviewView({
   )
 }
 
-/** 익스포트 액션 + 완료 후 Finder 열기·경로 복사·용량 경고 (AC1·3·4). */
+/** 포맷별 용량 제한 안내 문구 (경고에 쓴다). */
+function limitLabel(format: ExportFormat): string {
+  return format === 'gif' ? 'GitHub 10MB(이미지) 제한' : 'GitHub 100MB 제한'
+}
+
+/** 익스포트 액션(MP4/GIF 선택) + 완료 후 Finder 열기·경로 복사·용량 경고 (AC1·2·3·4). */
 function ExportPanel({
   status,
   onExport
 }: {
   status: ExportStatus
-  onExport: () => void
+  onExport: (format: ExportFormat) => void
 }): JSX.Element {
   if (status.phase === 'encoding') {
     const pct =
       status.totalFrames > 0 ? Math.round((status.renderedFrames / status.totalFrames) * 100) : 0
-    return <p className="hint">익스포트 중… {pct}%</p>
+    return (
+      <p className="hint">
+        {status.format.toUpperCase()} 익스포트 중… {pct}%
+      </p>
+    )
   }
 
   if (status.phase === 'done') {
     return (
       <div className="export-done">
         <p className="hint">
-          MP4 저장 완료 · {formatMB(status.sizeBytes)}
+          {status.format.toUpperCase()} 저장 완료 · {formatMB(status.sizeBytes)}
           {status.exceedsLimit && (
-            <span className="export-warn"> ⚠ GitHub 100MB 제한을 초과했습니다</span>
+            <span className="export-warn"> ⚠ {limitLabel(status.format)}을 초과했습니다</span>
           )}
         </p>
         <div className="export-actions">
@@ -349,9 +360,14 @@ function ExportPanel({
   return (
     <div className="export-done">
       {status.phase === 'error' && <p className="export-warn">익스포트 실패: {status.message}</p>}
-      <button className="btn btn-export" onClick={onExport}>
-        MP4 익스포트
-      </button>
+      <div className="export-actions">
+        <button className="btn btn-export" onClick={() => onExport('mp4')}>
+          MP4 익스포트
+        </button>
+        <button className="btn btn-export" onClick={() => onExport('gif')}>
+          GIF 익스포트
+        </button>
+      </div>
     </div>
   )
 }

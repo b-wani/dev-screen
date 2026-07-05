@@ -1,19 +1,21 @@
 /**
- * 익스포트 인코딩 층 — 렌더 레시피를 원본에 적용해 최종 MP4 바이트를 만드는 후처리 렌더링.
+ * 익스포트 인코딩 층 — 렌더 레시피를 원본에 적용해 최종 MP4/GIF 바이트를 만드는 후처리 렌더링.
  *
  * 미리보기와 "완전히 동일한" 샘플링·그리기 경로를 공유한다: 매 프레임 sampleComposition으로
  * 카메라·커서·클릭·배경/패딩·배지를 한 번에 얻고 drawComposition으로 그린다 — 보이는 것과
  * 내보내는 것이 같다(SPEC 후처리 렌더링 모델·이슈 #8 수용 기준).
- * WebCodecs 인코딩·MP4 먹싱은 mediabunny(Chromium 미디어 스택)에 위임한다.
+ * MP4는 WebCodecs 인코딩·먹싱을 mediabunny(Chromium 미디어 스택)에 위임하고,
+ * GIF는 gifenc(팔레트 양자화 + LZW)로 인코딩한다 — 프레임 생성 경로는 두 포맷이 공유한다.
  *
  * 트림 창 밖 프레임은 익스포트하지 않는다 — 최종 영상 길이는 트림된 길이(trim)를 따른다.
  * 이 층은 효과를 계산하지 않는다(recipe.ts가 굽는다) — 프레임을 뽑아 인코더에 밀 뿐이다.
  */
 
 import { Output, BufferTarget, Mp4OutputFormat, CanvasSource } from 'mediabunny'
+import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 import { sampleComposition, type RenderRecipe } from '../../shared/recipe'
 import { trimmedDurationMs } from '../../shared/recipe.edit'
-import { resolveEncodeConfig, type ExportPreset } from '../../shared/export-preset'
+import { resolveEncodeConfig, resolveGifConfig, type ExportPreset } from '../../shared/export-preset'
 import { drawComposition } from './compose'
 
 export interface ExportProgress {
@@ -75,6 +77,61 @@ export async function renderRecipeToMp4(
   const buffer = output.target.buffer
   if (!buffer) throw new Error('익스포트 버퍼가 비어 있습니다')
   return buffer
+}
+
+/**
+ * 원본 영상 + 렌더 레시피 + 프리셋 → GIF 바이트.
+ * MP4와 동일하게 sampleComposition·drawComposition로 미리보기와 같은 합성(배경/배지·커서·트림)을
+ * 그린 뒤, 프레임마다 팔레트를 양자화해 gifenc로 인코딩한다. 진행률은 onProgress로 보고한다.
+ */
+export async function renderRecipeToGif(
+  video: HTMLVideoElement,
+  recipe: RenderRecipe,
+  preset: ExportPreset,
+  onProgress?: (p: ExportProgress) => void
+): Promise<ArrayBuffer> {
+  const config = resolveGifConfig(preset, recipe.source)
+  // 최종 GIF 길이도 트림된 길이를 따른다.
+  const outputDurationMs = trimmedDurationMs(recipe)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = config.width
+  canvas.height = config.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('GIF 캔버스 컨텍스트를 만들 수 없습니다')
+  // MP4와 동일하게 원본 좌표계로 그리도록 컨텍스트를 축소 스케일한다(미리보기와 동일 합성).
+  ctx.scale(config.width / recipe.source.width, config.height / recipe.source.height)
+
+  const encoder = GIFEncoder()
+  const frameDelayMs = 1000 / config.fps
+  const frameDurationSec = 1 / config.fps
+  const totalFrames = Math.max(1, Math.round((outputDurationMs / 1000) * config.fps))
+
+  const wasPaused = video.paused
+  video.pause()
+
+  try {
+    for (let i = 0; i < totalFrames; i++) {
+      const tSec = i * frameDurationSec
+      // 출력 타임라인은 0부터지만, 원본에서는 트림 시작 지점부터 샘플링·시크한다.
+      const sourceMs = recipe.trim.startMs + tSec * 1000
+      await seekVideo(video, sourceMs / 1000)
+      const comp = sampleComposition(recipe, sourceMs)
+      drawComposition(ctx, video, comp, recipe.source)
+
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const palette = quantize(data, config.maxColors)
+      const index = applyPalette(data, palette)
+      encoder.writeFrame(index, canvas.width, canvas.height, { palette, delay: frameDelayMs })
+      onProgress?.({ renderedFrames: i + 1, totalFrames })
+    }
+    encoder.finish()
+  } finally {
+    if (!wasPaused) void video.play()
+  }
+
+  // bytes()는 정확히 잘린 사본이라 buffer 전체가 GIF 데이터다(부분 뷰 아님).
+  return encoder.bytes().buffer as ArrayBuffer
 }
 
 /** 영상을 지정 시각(초)으로 시크하고 프레임이 준비될 때까지 기다린다. */

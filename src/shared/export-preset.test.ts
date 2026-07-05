@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   GITHUB_PRESET,
   resolveEncodeConfig,
+  resolveGifConfig,
   exceedsSizeLimit,
+  sizeLimitBytes,
   type ExportPreset
 } from './export-preset'
 
@@ -13,6 +15,12 @@ describe('GitHub 익스포트 프리셋: 데이터로 정의된 v1 유일 프리
     expect(GITHUB_PRESET.maxSizeBytes).toBe(100 * 1024 * 1024)
     expect(GITHUB_PRESET.maxHeight).toBe(1080)
     expect(GITHUB_PRESET.fps).toBe(60)
+  })
+
+  it('같은 프리셋이 GIF 타겟(이미지 10MB, ≤256색)도 함께 담는다 (CONTEXT 프리셋)', () => {
+    expect(GITHUB_PRESET.gifMaxSizeBytes).toBe(10 * 1024 * 1024)
+    expect(GITHUB_PRESET.gifMaxColors).toBeLessThanOrEqual(256)
+    expect(GITHUB_PRESET.gifMaxHeight).toBeLessThanOrEqual(GITHUB_PRESET.maxHeight)
   })
 })
 
@@ -63,15 +71,41 @@ describe('resolveEncodeConfig: (프리셋, 원본 크기, 길이) → 인코딩 
   })
 })
 
-describe('exceedsSizeLimit: 결과 파일 용량 초과 판정 (AC4)', () => {
-  const preset: ExportPreset = { ...GITHUB_PRESET, maxSizeBytes: 1000 }
-
-  it('상한 이하면 false', () => {
-    expect(exceedsSizeLimit(preset, 1000)).toBe(false)
-    expect(exceedsSizeLimit(preset, 999)).toBe(false)
+describe('resolveGifConfig: (프리셋, 원본 크기) → GIF 인코딩 설정', () => {
+  it('원본을 gifMaxHeight 이하로 비율 유지 축소한다', () => {
+    // 원본 2880×1800 → gifMaxHeight 480이면 scale 0.2667 → 768×480.
+    const cfg = resolveGifConfig(GITHUB_PRESET, { width: 2880, height: 1800 })
+    expect(cfg.height).toBe(480)
+    expect(cfg.width).toBe(768)
+    expect(cfg.fps).toBe(GITHUB_PRESET.gifFps)
+    expect(cfg.maxColors).toBe(GITHUB_PRESET.gifMaxColors)
   })
 
-  it('상한 초과면 true', () => {
+  it('원본이 상한보다 작으면 확대하지 않는다', () => {
+    const cfg = resolveGifConfig(GITHUB_PRESET, { width: 320, height: 240 })
+    expect(cfg.width).toBe(320)
+    expect(cfg.height).toBe(240)
+  })
+})
+
+describe('용량 상한 판정: 포맷별 제한 (AC3/AC4)', () => {
+  const preset: ExportPreset = { ...GITHUB_PRESET, maxSizeBytes: 1000, gifMaxSizeBytes: 500 }
+
+  it('sizeLimitBytes는 포맷에 맞는 상한을 돌려준다', () => {
+    expect(sizeLimitBytes(preset, 'mp4')).toBe(1000)
+    expect(sizeLimitBytes(preset, 'gif')).toBe(500)
+  })
+
+  it('MP4는 maxSizeBytes 기준으로 초과를 판정한다 (기본값)', () => {
+    expect(exceedsSizeLimit(preset, 1000)).toBe(false)
     expect(exceedsSizeLimit(preset, 1001)).toBe(true)
+  })
+
+  it('GIF는 gifMaxSizeBytes(더 작은 상한) 기준으로 초과를 판정한다', () => {
+    expect(exceedsSizeLimit(preset, 500, 'gif')).toBe(false)
+    expect(exceedsSizeLimit(preset, 501, 'gif')).toBe(true)
+    // MP4 상한(1000)엔 안 걸리는 크기도 GIF 상한(500)엔 걸린다.
+    expect(exceedsSizeLimit(preset, 900, 'gif')).toBe(true)
+    expect(exceedsSizeLimit(preset, 900, 'mp4')).toBe(false)
   })
 })

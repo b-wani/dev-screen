@@ -13,7 +13,7 @@ export const IpcChannel = {
   ListRecordings: 'recordings:list',
   /** 저장된 녹화 하나를 다시 열어 미리보기 상태로 복원한다. */
   OpenRecording: 'recording:open',
-  /** 익스포트 바이트를 녹화 폴더에 MP4로 저장한다. */
+  /** 익스포트 바이트를 녹화 폴더에 저장한다(포맷에 따라 export.mp4 / export.gif). */
   ExportSave: 'export:save',
   /** 저장된 파일을 Finder에서 연다. */
   ExportReveal: 'export:reveal',
@@ -35,7 +35,7 @@ export interface RecordingSummary {
 
 /** 익스포트 저장 결과 — 렌더러가 완료 UI(경로·용량·경고)를 그리는 데 쓴다. */
 export interface ExportSaveResult {
-  /** 저장된 MP4 절대 경로. */
+  /** 저장된 파일 절대 경로. */
   path: string
   /** 저장된 파일 크기(bytes). 용량 상한 초과 판정에 쓴다. */
   sizeBytes: number
