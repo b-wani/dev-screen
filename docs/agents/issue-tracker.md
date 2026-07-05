@@ -11,7 +11,7 @@ Issues and PRDs for this repo live as GitHub issues. Use the `gh` CLI for all op
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
-The repo is `b-wani/dev-screen`. This working directory is not yet a git clone, so always pass `-R b-wani/dev-screen` to `gh` commands. (Once a git remote is configured locally, the flag can be dropped — `gh` infers the repo automatically from `git remote -v`.)
+The repo is `b-wani/dev-screen`. `gh` infers it automatically from `git remote -v` when run inside this clone.
 
 ## Pull requests as a triage surface
 
