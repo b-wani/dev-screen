@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannel, type RecordingState, type ExportSaveResult } from '../shared/ipc'
+import type { ExportFormat } from '../shared/export-preset'
 
 /** 렌더러에 노출되는 안전한 API 표면. */
 const api = {
@@ -11,9 +12,12 @@ const api = {
     ipcRenderer.on(IpcChannel.State, listener)
     return () => ipcRenderer.removeListener(IpcChannel.State, listener)
   },
-  /** 익스포트된 MP4 바이트를 녹화 폴더에 저장하고 경로·용량을 돌려받는다. */
-  saveExport: (bytes: ArrayBuffer, folder: string): Promise<ExportSaveResult> =>
-    ipcRenderer.invoke(IpcChannel.ExportSave, bytes, folder),
+  /** 익스포트된 바이트를 포맷에 맞춰 녹화 폴더에 저장하고 경로·용량을 돌려받는다. */
+  saveExport: (
+    bytes: ArrayBuffer,
+    folder: string,
+    format: ExportFormat
+  ): Promise<ExportSaveResult> => ipcRenderer.invoke(IpcChannel.ExportSave, bytes, folder, format),
   /** 저장된 파일을 Finder에서 연다. */
   revealExport: (path: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannel.ExportReveal, path),
