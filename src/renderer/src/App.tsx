@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import type { RecordingState } from '../../shared/ipc'
 import {
   deriveRecipe,
-  sampleRecipe,
-  type CameraTransform,
+  sampleComposition,
+  COMPOSITE_DEFAULTS,
   type FrameSize,
   type RenderRecipe
 } from '../../shared/recipe'
+import { drawComposition } from './compose'
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -78,6 +79,20 @@ function PreviewView({
   const recipeRef = useRef<RenderRecipe | null>(null)
   const [zoomCount, setZoomCount] = useState(0)
 
+  // 배경/패딩·배지 편집 상태 — 렌더 레시피의 해당 필드에 그대로 반영된다.
+  const [bgColor, setBgColor] = useState<string>(COMPOSITE_DEFAULTS.backgroundColor)
+  const [padding, setPadding] = useState<number>(COMPOSITE_DEFAULTS.padding)
+  const [badgeVisible, setBadgeVisible] = useState<boolean>(COMPOSITE_DEFAULTS.badgeVisible)
+
+  // 컨트롤이 바뀌면 살아 있는 레시피에 밀어 넣는다. 재생 루프가 매 프레임 레시피를
+  // 다시 읽으므로 미리보기에 즉시 반영된다(AC: 즉시 반영).
+  useEffect(() => {
+    const recipe = recipeRef.current
+    if (!recipe) return
+    recipe.background = { color: bgColor, padding }
+    recipe.badge = { visible: badgeVisible }
+  }, [bgColor, padding, badgeVisible])
+
   // 영상 메타데이터가 오면(원본 크기 확정) 이벤트 트랙에서 렌더 레시피를 유도한다.
   const handleMetadata = (): void => {
     const video = videoRef.current
@@ -87,11 +102,14 @@ function PreviewView({
     canvas.width = source.width
     canvas.height = source.height
     const recipe = deriveRecipe(state.eventTrack, { source })
+    // 현재 편집 상태를 레시피에 반영해 둔다.
+    recipe.background = { color: bgColor, padding }
+    recipe.badge = { visible: badgeVisible }
     recipeRef.current = recipe
     setZoomCount(recipe.zoomSegments.length)
   }
 
-  // 재생 루프: 매 프레임 현재 시각을 샘플링해 카메라 변환을 얻고, 그대로 그린다.
+  // 재생 루프: 매 프레임 합성 파라미터를 샘플링해 그대로 그린다.
   useEffect(() => {
     let raf = 0
     const tick = (): void => {
@@ -100,8 +118,10 @@ function PreviewView({
       const canvas = canvasRef.current
       const recipe = recipeRef.current
       if (!video || !canvas || !recipe) return
-      const camera = sampleRecipe(recipe, video.currentTime * 1000)
-      drawSampledFrame(canvas, video, camera, recipe.source)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      const comp = sampleComposition(recipe, video.currentTime * 1000)
+      drawComposition(ctx, video, comp, recipe.source)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
@@ -120,6 +140,36 @@ function PreviewView({
         style={{ display: 'none' }}
       />
       <canvas ref={canvasRef} className="preview-canvas" />
+      <fieldset className="controls">
+        <legend>배경 / 배지</legend>
+        <label className="control">
+          <span>배경색</span>
+          <input
+            type="color"
+            value={bgColor}
+            onChange={(e) => setBgColor(e.target.value)}
+          />
+        </label>
+        <label className="control">
+          <span>패딩 {Math.round(padding * 100)}%</span>
+          <input
+            type="range"
+            min={0}
+            max={0.4}
+            step={0.01}
+            value={padding}
+            onChange={(e) => setPadding(Number(e.target.value))}
+          />
+        </label>
+        <label className="control control-check">
+          <input
+            type="checkbox"
+            checked={badgeVisible}
+            onChange={(e) => setBadgeVisible(e.target.checked)}
+          />
+          <span>뷰포트 크기 배지</span>
+        </label>
+      </fieldset>
       <dl className="meta">
         <div>
           <dt>길이</dt>
@@ -143,25 +193,6 @@ function PreviewView({
       </button>
     </section>
   )
-}
-
-/**
- * 미리보기 렌더링 층 — 효과 계산을 하지 않는다. 샘플링된 카메라 변환(camera)이
- * 지정한 원본 영역을 캔버스에 그리기만 한다.
- */
-function drawSampledFrame(
-  canvas: HTMLCanvasElement,
-  video: HTMLVideoElement,
-  camera: CameraTransform,
-  source: FrameSize
-): void {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const viewW = source.width / camera.scale
-  const viewH = source.height / camera.scale
-  const sx = camera.x - viewW / 2
-  const sy = camera.y - viewH / 2
-  ctx.drawImage(video, sx, sy, viewW, viewH, 0, 0, canvas.width, canvas.height)
 }
 
 function ErrorView({

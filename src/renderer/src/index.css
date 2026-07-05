@@ -111,6 +111,51 @@ body {
   background: black;
 }
 
+.controls {
+  border: 1px solid #3a3a3c;
+  border-radius: 10px;
+  padding: 12px 16px 14px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px;
+}
+
+.controls legend {
+  font-size: 12px;
+  color: #8e8e93;
+  padding: 0 6px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #aeaeb2;
+}
+
+.control-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.control input[type='color'] {
+  width: 44px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.control input[type='range'] {
+  width: 140px;
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;

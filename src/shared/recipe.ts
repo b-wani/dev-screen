@@ -45,8 +45,25 @@ export interface ZoomSegment {
 }
 
 /**
- * 렌더 레시피 — 녹화를 최종 영상으로 합성하는 파라미터. 이 슬라이스는 자동 줌만 다룬다.
- * (트림·배경/패딩·커서 설정은 이후 슬라이스에서 이 레시피에 더해진다.)
+ * 배경/패딩 스타일 — 첨부했을 때 보기 좋도록 원본 프레임 둘레에 입히는 여백과 배경.
+ * 경량 편집으로 조절하며, 미리보기와 익스포트에 동일하게 반영된다.
+ */
+export interface BackgroundStyle {
+  /** 배경 채우기 색 (CSS color). */
+  color: string
+  /** 패딩 두께 — 프레임 짧은 변 대비 비율 [0, 0.4]. 0이면 여백 없음. */
+  padding: number
+}
+
+/** 뷰포트 크기 배지 설정 — 녹화된 화면 크기를 최종 영상 구석에 표시한다. */
+export interface BadgeConfig {
+  /** 배지 표시 여부. 렌더 레시피에 저장되어 미리보기·익스포트에 반영된다. */
+  visible: boolean
+}
+
+/**
+ * 렌더 레시피 — 녹화를 최종 영상으로 합성하는 파라미터. 이 슬라이스는 자동 줌과
+ * 배경/패딩·배지를 다룬다. (트림·커서 설정은 이후 슬라이스에서 이 레시피에 더해진다.)
  */
 export interface RenderRecipe {
   source: FrameSize
@@ -54,6 +71,10 @@ export interface RenderRecipe {
   zoomScale: number
   durationMs: number
   zoomSegments: ZoomSegment[]
+  /** 배경/패딩 스타일. */
+  background: BackgroundStyle
+  /** 뷰포트 크기 배지 설정. */
+  badge: BadgeConfig
 }
 
 /** 시각 t에서의 카메라 상태 — 미리보기 층이 그대로 그린다. */
@@ -63,6 +84,23 @@ export interface CameraTransform {
   /** 카메라가 화면 중앙에 두는 원본 좌표(px). */
   x: number
   y: number
+}
+
+/** 배지 샘플링 결과 — 표시 여부와 표시할 문자열(라벨). */
+export interface BadgeState {
+  visible: boolean
+  /** 뷰포트 크기 라벨 (예: "1440×900"). 녹화된 화면 크기에서 유도. */
+  label: string
+}
+
+/**
+ * 시각 t의 합성 파라미터 전체 — 미리보기와 익스포트가 공유하는 단일 샘플링 출력.
+ * 카메라 변환에 더해 배경/패딩·배지를 함께 담아, 두 층이 동일한 프레임을 그리게 한다.
+ */
+export interface FrameComposition {
+  camera: CameraTransform
+  background: BackgroundStyle
+  badge: BadgeState
 }
 
 export interface DeriveConfig {
@@ -86,6 +124,16 @@ export const ZOOM_DEFAULTS = {
   rampOutMs: 500,
   /** 클릭 간격이 이 이내면 한 줌 구간으로 병합 (SPEC 4: 3초 이내 줌 유지). */
   mergeGapMs: 3000
+} as const
+
+/** 배경/패딩·배지 기본값. 유도 시 레시피에 담기고, 경량 편집으로 바뀐다. */
+export const COMPOSITE_DEFAULTS = {
+  /** 기본 배경색. */
+  backgroundColor: '#1c1c1e',
+  /** 기본 패딩 비율 (짧은 변의 6%). */
+  padding: 0.06,
+  /** 배지는 기본으로 켜 둔다. */
+  badgeVisible: true
 } as const
 
 /**
@@ -127,7 +175,28 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
     source: { width: config.source.width, height: config.source.height },
     zoomScale,
     durationMs: track.durationMs,
-    zoomSegments
+    zoomSegments,
+    background: {
+      color: COMPOSITE_DEFAULTS.backgroundColor,
+      padding: COMPOSITE_DEFAULTS.padding
+    },
+    badge: { visible: COMPOSITE_DEFAULTS.badgeVisible }
+  }
+}
+
+/**
+ * 합성 파라미터 샘플링: 시각 t에서 프레임 하나를 합성하는 데 필요한 값 전체를 낸다.
+ * 카메라 변환(sampleRecipe)에 레시피의 배경/패딩·배지를 더한다. 배지 라벨은 녹화된
+ * 화면 크기(source)에서 유도하므로, 미리보기와 익스포트가 같은 문자열을 그린다.
+ */
+export function sampleComposition(recipe: RenderRecipe, t: number): FrameComposition {
+  return {
+    camera: sampleRecipe(recipe, t),
+    background: recipe.background,
+    badge: {
+      visible: recipe.badge.visible,
+      label: `${recipe.source.width}×${recipe.source.height}`
+    }
   }
 }
 
