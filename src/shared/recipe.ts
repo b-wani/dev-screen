@@ -5,13 +5,14 @@
  *
  *  1. 자동 효과 유도  `deriveRecipe(이벤트 트랙) → 렌더 레시피`
  *     클릭 이벤트로부터 줌 구간 목록(팬 키프레임 포함)을 생성한다.
- *  2. 레시피 샘플링   `sampleFrame(렌더 레시피, 시각 t) → 프레임 샘플`
- *     특정 시각의 카메라 변환(줌+팬)·스무딩된 커서·클릭 하이라이트를 함께 계산한다.
- *     (`sampleRecipe`는 카메라 변환만 떼어낸 하위 함수다.)
+ *  2. 합성 파라미터 샘플링   `sampleComposition(렌더 레시피, 시각 t) → 프레임 합성`
+ *     특정 시각의 카메라 변환(줌+팬)·스무딩된 커서·클릭 하이라이트에 더해
+ *     배경/패딩·배지까지 합쳐, 미리보기와 익스포트가 공유하는 단일 출력을 낸다.
+ *     (`sampleFrame`은 카메라·커서·클릭만, `sampleRecipe`는 카메라 변환만 떼어낸 하위 함수다.)
  *
- * 미리보기 렌더링(Canvas)은 sampleFrame의 출력을 그대로 그리기만 하는 얇은 층이다.
- * 효과 계산(줌 이징·팬·커서 스무딩·클릭 하이라이트)은 전부 이 모듈 안에 있다.
- * 튜닝 수치(배율·이징·타이밍·스무딩 강도)는 여기 상수로 모은다.
+ * 미리보기·익스포트 렌더링(Canvas)은 sampleComposition의 출력을 그대로 그리기만 하는 얇은 층이다.
+ * 효과 계산(줌 이징·팬·커서 스무딩·클릭 하이라이트·배경/패딩·배지)은 전부 이 모듈 안에 있다.
+ * 튜닝 수치(배율·이징·타이밍·스무딩 강도·배경/패딩 기본값)는 여기 상수로 모은다.
  */
 
 import type { CursorKind, EventTrack, MouseSample } from './event-track'
@@ -82,8 +83,25 @@ export interface Trim {
 }
 
 /**
- * 렌더 레시피 — 녹화를 최종 영상으로 합성하는 파라미터. 이 슬라이스는 자동 줌 + 팬 + 커서 + 트림을 다룬다.
- * (배경/패딩 스타일은 이후 슬라이스에서 이 레시피에 더해진다.)
+ * 배경/패딩 스타일 — 첨부했을 때 보기 좋도록 원본 프레임 둘레에 입히는 여백과 배경.
+ * 경량 편집으로 조절하며, 미리보기와 익스포트에 동일하게 반영된다.
+ */
+export interface BackgroundStyle {
+  /** 배경 채우기 색 (CSS color). */
+  color: string
+  /** 패딩 두께 — 프레임 짧은 변 대비 비율 [0, 0.4]. 0이면 여백 없음. */
+  padding: number
+}
+
+/** 뷰포트 크기 배지 설정 — 녹화된 화면 크기를 최종 영상 구석에 표시한다. */
+export interface BadgeConfig {
+  /** 배지 표시 여부. 렌더 레시피에 저장되어 미리보기·익스포트에 반영된다. */
+  visible: boolean
+}
+
+/**
+ * 렌더 레시피 — 녹화를 최종 영상으로 합성하는 파라미터.
+ * 자동 줌 + 팬 + 커서 + 트림 + 배경/패딩·배지를 다룬다.
  */
 export interface RenderRecipe {
   source: FrameSize
@@ -95,6 +113,10 @@ export interface RenderRecipe {
   cursor: CursorTrack
   /** 최종 영상으로 남길 원본 시간 범위. 기본은 전 구간 [0, durationMs]. */
   trim: Trim
+  /** 배경/패딩 스타일. */
+  background: BackgroundStyle
+  /** 뷰포트 크기 배지 설정. */
+  badge: BadgeConfig
 }
 
 /** 시각 t에서의 카메라 상태 — 미리보기 층이 그대로 그린다. */
@@ -125,7 +147,7 @@ export interface ClickHighlight {
 }
 
 /**
- * 프레임 샘플 — 시각 t에서 미리보기 층이 그려야 할 모든 합성 파라미터.
+ * 프레임 샘플 — 시각 t에서 미리보기 층이 그려야 할 카메라·커서·클릭 파라미터.
  * 카메라 변환 + 스무딩된 커서 + (있다면) 클릭 하이라이트.
  */
 export interface FrameSample {
@@ -134,6 +156,27 @@ export interface FrameSample {
   cursor: CursorSample | null
   /** 활성 클릭 하이라이트가 없으면 null. */
   click: ClickHighlight | null
+}
+
+/** 배지 샘플링 결과 — 표시 여부와 표시할 문자열(라벨). */
+export interface BadgeState {
+  visible: boolean
+  /** 뷰포트 크기 라벨 (예: "1440×900"). 녹화된 화면 크기에서 유도. */
+  label: string
+}
+
+/**
+ * 시각 t의 합성 파라미터 전체 — 미리보기와 익스포트가 공유하는 단일 샘플링 출력.
+ * 카메라·커서·클릭(프레임 샘플)에 더해 배경/패딩·배지를 함께 담아, 두 층이 동일한 프레임을 그린다.
+ */
+export interface FrameComposition {
+  camera: CameraTransform
+  /** 커서 이벤트가 없으면 null. */
+  cursor: CursorSample | null
+  /** 활성 클릭 하이라이트가 없으면 null. */
+  click: ClickHighlight | null
+  background: BackgroundStyle
+  badge: BadgeState
 }
 
 export interface DeriveConfig {
@@ -170,6 +213,16 @@ export const CURSOR_DEFAULTS = {
   smoothingMs: 120,
   /** 클릭 하이라이트(리플+눌림)가 지속되는 시간(ms). */
   clickHighlightMs: 400
+} as const
+
+/** 배경/패딩·배지 기본값. 유도 시 레시피에 담기고, 경량 편집으로 바뀐다. */
+export const COMPOSITE_DEFAULTS = {
+  /** 기본 배경색. */
+  backgroundColor: '#1c1c1e',
+  /** 기본 패딩 비율 (짧은 변의 6%). */
+  padding: 0.06,
+  /** 배지는 기본으로 켜 둔다. */
+  badgeVisible: true
 } as const
 
 /**
@@ -223,7 +276,12 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
     durationMs: track.durationMs,
     zoomSegments,
     cursor,
-    trim: { startMs: 0, endMs: track.durationMs }
+    trim: { startMs: 0, endMs: track.durationMs },
+    background: {
+      color: COMPOSITE_DEFAULTS.backgroundColor,
+      padding: COMPOSITE_DEFAULTS.padding
+    },
+    badge: { visible: COMPOSITE_DEFAULTS.badgeVisible }
   }
 }
 
@@ -285,7 +343,7 @@ export function sampleRecipe(recipe: RenderRecipe, t: number): CameraTransform {
 }
 
 /**
- * 프레임 샘플링: 시각 t에서 미리보기 층이 그려야 할 합성 파라미터 전체를 계산한다.
+ * 프레임 샘플링: 시각 t에서 그려야 할 카메라·커서·클릭 파라미터를 계산한다.
  * 카메라 변환 + 스무딩된 커서 + (있다면) 클릭 하이라이트. 계산은 전부 여기(순수 층)에서 한다.
  */
 export function sampleFrame(recipe: RenderRecipe, t: number): FrameSample {
@@ -297,6 +355,25 @@ export function sampleFrame(recipe: RenderRecipe, t: number): FrameSample {
     camera: sampleRecipe(recipe, t),
     cursor: sampleCursor(recipe.cursor, t),
     click: sampleClick(recipe.cursor, t)
+  }
+}
+
+/**
+ * 합성 파라미터 샘플링: 시각 t에서 프레임 하나를 합성하는 데 필요한 값 전체를 낸다.
+ * 프레임 샘플(카메라·커서·클릭, 트림 반영)에 레시피의 배경/패딩·배지를 더한다. 배지
+ * 라벨은 녹화된 화면 크기(source)에서 유도하므로, 미리보기와 익스포트가 같은 문자열을 그린다.
+ */
+export function sampleComposition(recipe: RenderRecipe, t: number): FrameComposition {
+  const frame = sampleFrame(recipe, t)
+  return {
+    camera: frame.camera,
+    cursor: frame.cursor,
+    click: frame.click,
+    background: recipe.background,
+    badge: {
+      visible: recipe.badge.visible,
+      label: `${recipe.source.width}×${recipe.source.height}`
+    }
   }
 }
 
