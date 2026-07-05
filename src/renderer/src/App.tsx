@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RecordingState } from '../../shared/ipc'
-import {
-  deriveRecipe,
-  sampleRecipe,
-  type CameraTransform,
-  type FrameSize,
-  type RenderRecipe
-} from '../../shared/recipe'
+import { deriveRecipe, sampleRecipe, type FrameSize, type RenderRecipe } from '../../shared/recipe'
+import { GITHUB_PRESET, exceedsSizeLimit } from '../../shared/export-preset'
+import { renderRecipeToMp4 } from './export'
+import { drawSampledFrame } from './frame'
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -14,6 +11,17 @@ function formatElapsed(ms: number): string {
   const s = String(total % 60).padStart(2, '0')
   return `${m}:${s}`
 }
+
+function formatMB(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+/** 익스포트 진행 상태. 미리보기 패널의 하단 액션을 이 상태만 보고 그린다. */
+type ExportStatus =
+  | { phase: 'idle' }
+  | { phase: 'encoding'; renderedFrames: number; totalFrames: number }
+  | { phase: 'done'; path: string; sizeBytes: number; exceedsLimit: boolean }
+  | { phase: 'error'; message: string }
 
 export default function App(): JSX.Element {
   const [state, setState] = useState<RecordingState>({ status: 'idle' })
@@ -77,6 +85,7 @@ function PreviewView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const recipeRef = useRef<RenderRecipe | null>(null)
   const [zoomCount, setZoomCount] = useState(0)
+  const [exportStatus, setExportStatus] = useState<ExportStatus>({ phase: 'idle' })
 
   // 영상 메타데이터가 오면(원본 크기 확정) 이벤트 트랙에서 렌더 레시피를 유도한다.
   const handleMetadata = (): void => {
@@ -107,12 +116,35 @@ function PreviewView({
     return () => cancelAnimationFrame(raf)
   }, [])
 
+  // 익스포트: 미리보기와 동일한 레시피로 원본을 인코딩(WebCodecs)해 폴더에 MP4로 저장한다.
+  const handleExport = async (): Promise<void> => {
+    const video = videoRef.current
+    const recipe = recipeRef.current
+    if (!video || !recipe) return
+    setExportStatus({ phase: 'encoding', renderedFrames: 0, totalFrames: 0 })
+    try {
+      const bytes = await renderRecipeToMp4(video, recipe, GITHUB_PRESET, (p) =>
+        setExportStatus({ phase: 'encoding', ...p })
+      )
+      const { path, sizeBytes } = await window.devScreen.saveExport(bytes, state.folder)
+      setExportStatus({
+        phase: 'done',
+        path,
+        sizeBytes,
+        exceedsLimit: exceedsSizeLimit(GITHUB_PRESET, sizeBytes)
+      })
+    } catch (err) {
+      setExportStatus({ phase: 'error', message: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
   return (
     <section className="panel preview">
       <video
         ref={videoRef}
         src={state.videoUrl}
         onLoadedMetadata={handleMetadata}
+        crossOrigin="anonymous"
         autoPlay
         muted
         loop
@@ -138,6 +170,7 @@ function PreviewView({
           <dd className="path">{state.folder}</dd>
         </div>
       </dl>
+      <ExportPanel status={exportStatus} onExport={handleExport} />
       <button className="btn btn-record" onClick={() => window.devScreen.start()}>
         ● 다시 녹화
       </button>
@@ -145,23 +178,49 @@ function PreviewView({
   )
 }
 
-/**
- * 미리보기 렌더링 층 — 효과 계산을 하지 않는다. 샘플링된 카메라 변환(camera)이
- * 지정한 원본 영역을 캔버스에 그리기만 한다.
- */
-function drawSampledFrame(
-  canvas: HTMLCanvasElement,
-  video: HTMLVideoElement,
-  camera: CameraTransform,
-  source: FrameSize
-): void {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const viewW = source.width / camera.scale
-  const viewH = source.height / camera.scale
-  const sx = camera.x - viewW / 2
-  const sy = camera.y - viewH / 2
-  ctx.drawImage(video, sx, sy, viewW, viewH, 0, 0, canvas.width, canvas.height)
+/** 익스포트 액션 + 완료 후 Finder 열기·경로 복사·용량 경고 (AC1·3·4). */
+function ExportPanel({
+  status,
+  onExport
+}: {
+  status: ExportStatus
+  onExport: () => void
+}): JSX.Element {
+  if (status.phase === 'encoding') {
+    const pct =
+      status.totalFrames > 0 ? Math.round((status.renderedFrames / status.totalFrames) * 100) : 0
+    return <p className="hint">익스포트 중… {pct}%</p>
+  }
+
+  if (status.phase === 'done') {
+    return (
+      <div className="export-done">
+        <p className="hint">
+          MP4 저장 완료 · {formatMB(status.sizeBytes)}
+          {status.exceedsLimit && (
+            <span className="export-warn"> ⚠ GitHub 100MB 제한을 초과했습니다</span>
+          )}
+        </p>
+        <div className="export-actions">
+          <button className="btn" onClick={() => window.devScreen.revealExport(status.path)}>
+            Finder에서 열기
+          </button>
+          <button className="btn" onClick={() => window.devScreen.copyExportPath(status.path)}>
+            경로 복사
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="export-done">
+      {status.phase === 'error' && <p className="export-warn">익스포트 실패: {status.message}</p>}
+      <button className="btn btn-export" onClick={onExport}>
+        MP4 익스포트
+      </button>
+    </div>
+  )
 }
 
 function ErrorView({
