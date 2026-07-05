@@ -6,6 +6,7 @@ import {
   parseSidecarLine,
   foldSidecarMessages,
   SidecarProtocolError,
+  type CaptureTarget,
   type SidecarMessage
 } from './sidecar/protocol'
 import type { EventTrack } from '../shared/event-track'
@@ -28,10 +29,12 @@ export interface RecordingResult {
   eventTrack: EventTrack
   durationMs: number
   eventCount: number
+  /** 녹화된 캡처 대상 (전체 화면 또는 특정 창). */
+  target: CaptureTarget
 }
 
 export interface RecorderCallbacks {
-  onReady: (info: { startedAt: number }) => void
+  onReady: (info: { startedAt: number; target: CaptureTarget }) => void
   onEvent: (count: number) => void
   onError: (code: string, message: string) => void
   onComplete: (result: RecordingResult) => void
@@ -55,8 +58,46 @@ export class Recorder {
     return this.child !== null
   }
 
-  /** 사이드카를 띄우고 전체 화면 녹화를 시작한다. */
-  async start(cb: RecorderCallbacks, now = new Date()): Promise<void> {
+  /**
+   * 선택 가능한 캡처 대상(전체 화면 + 열린 창)을 사이드카에게 물어본다.
+   * 사이드카를 `list` 모드로 한 번 띄워 targets 메시지 한 줄을 받고 종료시킨다.
+   */
+  listTargets(): Promise<CaptureTarget[]> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(this.sidecarPath, ['list'], { stdio: ['ignore', 'pipe', 'pipe'] })
+      let settled = false
+      const rl = createInterface({ input: child.stdout })
+      rl.on('line', (line) => {
+        if (settled || line.trim().length === 0) return
+        try {
+          const msg = parseSidecarLine(line)
+          if (msg.type === 'targets') {
+            settled = true
+            resolve(msg.targets)
+          } else if (msg.type === 'error') {
+            settled = true
+            reject(new Error(`${msg.code}: ${msg.message}`))
+          }
+        } catch (err) {
+          if (err instanceof SidecarProtocolError) console.error('[sidecar 프로토콜 위반]', err.message)
+        }
+      })
+      child.stderr.on('data', (d) => console.error('[sidecar]', String(d).trimEnd()))
+      child.on('error', (err) => {
+        if (settled) return
+        settled = true
+        reject(err)
+      })
+      child.on('exit', () => {
+        if (settled) return
+        settled = true
+        reject(new Error('사이드카가 대상 목록을 반환하지 않고 종료되었습니다'))
+      })
+    })
+  }
+
+  /** 사이드카를 띄우고 지정한 대상(전체 화면 또는 특정 창)의 녹화를 시작한다. */
+  async start(targetId: string, cb: RecorderCallbacks, now = new Date()): Promise<void> {
     if (this.child) throw new Error('이미 녹화 중입니다')
 
     this.messages = []
@@ -65,7 +106,7 @@ export class Recorder {
     this.folder = join(recordingsBaseDir(), timestampFolderName(now))
     await mkdir(this.folder, { recursive: true })
 
-    const child = spawn(this.sidecarPath, ['record', '--out', this.folder], {
+    const child = spawn(this.sidecarPath, ['record', '--out', this.folder, '--target', targetId], {
       stdio: ['pipe', 'pipe', 'pipe']
     })
     this.child = child
@@ -105,7 +146,7 @@ export class Recorder {
   private handleMessage(msg: SidecarMessage, cb: RecorderCallbacks): void {
     switch (msg.type) {
       case 'ready':
-        cb.onReady({ startedAt: msg.startedAt })
+        cb.onReady({ startedAt: msg.startedAt, target: msg.target })
         break
       case 'event':
         this.eventCount += 1
@@ -141,7 +182,8 @@ export class Recorder {
       videoPath: outcome.recording.rawVideoPath,
       startedAt: outcome.recording.startedAt,
       durationMs: outcome.recording.durationMs,
-      eventCount: outcome.eventTrack.samples.length
+      eventCount: outcome.eventTrack.samples.length,
+      target: outcome.recording.target
     })
 
     cb.onComplete({
@@ -150,7 +192,8 @@ export class Recorder {
       eventsPath,
       eventTrack: outcome.eventTrack,
       durationMs: outcome.recording.durationMs,
-      eventCount: outcome.eventTrack.samples.length
+      eventCount: outcome.eventTrack.samples.length,
+      target: outcome.recording.target
     })
   }
 

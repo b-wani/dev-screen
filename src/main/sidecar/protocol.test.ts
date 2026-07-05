@@ -22,30 +22,67 @@ function parseFixture(name: string): SidecarMessage[] {
 }
 
 describe('사이드카 프로토콜 계약', () => {
-  it('클릭이 담긴 세션 픽스처를 녹화 참조와 이벤트 트랙으로 분리한다', () => {
+  it('list 응답은 전체 화면(디스플레이)과 개별 창을 모두 선택지로 담는다', () => {
+    const msgs = parseFixture('targets.jsonl')
+    expect(msgs).toHaveLength(1)
+    const targets = msgs[0]
+    if (targets.type !== 'targets') throw new Error('targets 메시지가 아니다')
+
+    expect(targets.protocolVersion).toBe(SIDECAR_PROTOCOL_VERSION)
+    // 전체 화면 선택지 하나 이상.
+    expect(targets.targets.some((t) => t.kind === 'display')).toBe(true)
+    // 개별 창 선택지가 좌표 공간 크기와 함께 열거된다.
+    const window = targets.targets.find((t) => t.id === 'window:47')
+    expect(window).toEqual({
+      kind: 'window',
+      id: 'window:47',
+      title: 'Safari — GitHub',
+      width: 1200,
+      height: 800
+    })
+  })
+
+  it('창 녹화 세션을 녹화 참조와 이벤트 트랙으로 분리하고 대상을 양쪽에 실어 준다', () => {
     const outcome = foldSidecarMessages(parseFixture('session-with-clicks.jsonl'))
 
     expect(outcome.ok).toBe(true)
     if (!outcome.ok) return
 
-    // 녹화 참조 — 원본 영상 파일을 가리킨다.
+    const target = {
+      kind: 'window' as const,
+      id: 'window:47',
+      title: 'Safari — GitHub',
+      width: 1200,
+      height: 800
+    }
+
+    // 녹화 참조 — 원본 영상 파일과 녹화된 대상을 가리킨다.
     expect(outcome.recording).toEqual({
       rawVideoPath: '/Users/dev/Movies/DevScreen/2026-07-05_1530/raw.mp4',
       startedAt: 1751710200000,
-      durationMs: 1500
+      durationMs: 1500,
+      target
     })
 
-    // 이벤트 트랙 — 원본 영상과 분리된 마우스 이벤트 로그.
+    // 이벤트 트랙 — 좌표가 놓인 대상을 함께 담아 자동 줌의 클램핑 경계를 알려 준다.
     expect(outcome.eventTrack.protocolVersion).toBe(SIDECAR_PROTOCOL_VERSION)
     expect(outcome.eventTrack.startedAt).toBe(1751710200000)
+    expect(outcome.eventTrack.target).toEqual(target)
     expect(outcome.eventTrack.samples).toHaveLength(7)
 
-    // 두 번의 클릭(down/up)이 트랙에 보존된다.
+    // 두 번의 클릭(down)이 창 좌표계 기준으로 보존된다 — 자동 줌이 이 지점을 확대한다.
     const downs = outcome.eventTrack.samples.filter((s) => s.kind === 'down')
     expect(downs).toEqual([
       { t: 300, kind: 'down', x: 420, y: 310, cursor: 'pointer' },
       { t: 980, kind: 'down', x: 800, y: 200, cursor: 'ibeam' }
     ])
+    // 클릭 좌표가 대상 경계(1200×800) 안에 있다.
+    for (const d of downs) {
+      expect(d.x).toBeGreaterThanOrEqual(0)
+      expect(d.x).toBeLessThanOrEqual(target.width)
+      expect(d.y).toBeGreaterThanOrEqual(0)
+      expect(d.y).toBeLessThanOrEqual(target.height)
+    }
 
     // 이벤트 트랙에 원본 영상 경로는 섞이지 않는다 (분리 저장).
     expect(outcome.eventTrack).not.toHaveProperty('rawVideoPath')
@@ -60,12 +97,46 @@ describe('사이드카 프로토콜 계약', () => {
     expect(outcome.error.message).toContain('화면 기록')
   })
 
+  it('지정한 창이 사라지면 target-not-found 오류가 표면화된다', () => {
+    const msg = parseSidecarLine(
+      '{"type":"error","code":"target-not-found","message":"선택한 창을 찾지 못했습니다."}'
+    )
+    const outcome = foldSidecarMessages([msg])
+    expect(outcome.ok).toBe(false)
+    if (outcome.ok) return
+    expect(outcome.error.code).toBe('target-not-found')
+  })
+
   it('계약을 벗어난 줄은 조용히 무시하지 않고 오류를 던진다', () => {
     expect(() => parseSidecarLine('이건 JSON이 아니다')).toThrow(SidecarProtocolError)
-    expect(() => parseSidecarLine('{"type":"event","kind":"scroll","t":1,"x":0,"y":0,"cursor":"arrow"}')).toThrow(
+    expect(() =>
+      parseSidecarLine('{"type":"event","kind":"scroll","t":1,"x":0,"y":0,"cursor":"arrow"}')
+    ).toThrow(SidecarProtocolError)
+    expect(() => parseSidecarLine('{"type":"ready","protocolVersion":2}')).toThrow(
       SidecarProtocolError
     )
-    expect(() => parseSidecarLine('{"type":"ready","protocolVersion":1}')).toThrow(SidecarProtocolError)
+  })
+
+  it('ready에 캡처 대상이 없으면 계약 위반이다', () => {
+    expect(() =>
+      parseSidecarLine(
+        '{"type":"ready","protocolVersion":2,"rawVideoPath":"/tmp/raw.mp4","startedAt":1}'
+      )
+    ).toThrow(SidecarProtocolError)
+    // target에 크기가 빠져도 위반이다 (좌표 공간 경계를 알 수 없다).
+    expect(() =>
+      parseSidecarLine(
+        '{"type":"ready","protocolVersion":2,"rawVideoPath":"/tmp/raw.mp4","startedAt":1,"target":{"kind":"window","id":"window:1","title":"x"}}'
+      )
+    ).toThrow(SidecarProtocolError)
+  })
+
+  it('구버전(v1) 사이드카 세션은 프로토콜 불일치로 거부된다', () => {
+    const msgs = parseFixture('session-with-clicks.jsonl')
+    const ready = msgs[0]
+    if (ready.type !== 'ready') throw new Error('픽스처 전제 위반')
+    ready.protocolVersion = 1
+    expect(() => foldSidecarMessages(msgs)).toThrow(SidecarProtocolError)
   })
 
   it('ready로 시작하지 않으면 계약 위반이다', () => {

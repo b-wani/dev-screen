@@ -43,7 +43,8 @@ function manifest(startedAt: number): RecordingManifest {
     videoPath: join('/movies', String(startedAt), 'raw.mp4'),
     startedAt,
     durationMs: 5000,
-    eventCount: eventTrack.samples.length
+    eventCount: eventTrack.samples.length,
+    target: { kind: 'display', id: 'display:1', title: '내장 디스플레이', width: 1000, height: 800 }
   }
 }
 

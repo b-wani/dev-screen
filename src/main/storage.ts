@@ -14,7 +14,7 @@
 import { readFile, writeFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { EventTrack } from '../shared/event-track'
+import type { CaptureTarget, EventTrack } from '../shared/event-track'
 import type { RenderRecipe } from '../shared/recipe'
 import { serializeRecipe, parseRecipe } from '../shared/recipe.persist'
 import type { RecordingSummary } from '../shared/ipc'
@@ -35,6 +35,8 @@ export interface RecordingManifest {
   durationMs: number
   /** 이벤트 트랙 개수. */
   eventCount: number
+  /** 녹화된 캡처 대상 (전체 화면 또는 특정 창). 다시 열 때 미리보기가 복원한다. */
+  target: CaptureTarget
 }
 
 const MANIFEST_VERSION = 1
@@ -61,6 +63,8 @@ export interface LoadedRecording {
   durationMs: number
   eventCount: number
   eventTrack: EventTrack
+  /** 녹화된 캡처 대상 (전체 화면 또는 특정 창). */
+  target: CaptureTarget
   /** 저장된 편집 상태. 없으면(레시피 저장 전) 이벤트 트랙에서 다시 유도한다. */
   recipe: RenderRecipe | null
 }
@@ -109,6 +113,7 @@ export async function loadRecording(folder: string): Promise<LoadedRecording> {
     durationMs: manifest.durationMs,
     eventCount: manifest.eventCount,
     eventTrack,
+    target: manifest.target,
     recipe: await readRecipe(folder)
   }
 }
@@ -117,6 +122,7 @@ async function readManifest(folder: string): Promise<RecordingManifest | null> {
   try {
     const raw = JSON.parse(await readFile(join(folder, MANIFEST_FILE), 'utf8')) as RecordingManifest
     if (raw.version !== MANIFEST_VERSION || typeof raw.videoPath !== 'string') return null
+    if (typeof raw.target !== 'object' || raw.target === null) return null
     return raw
   } catch {
     return null

@@ -4,7 +4,7 @@ import Foundation
 /// 본체 쪽 계약은 src/main/sidecar/protocol.ts, 문서는 docs/sidecar-protocol.md.
 /// 여기에는 효과 로직이 없다 — 메시지를 stdout에 JSONL로 흘리기만 한다.
 enum Protocol {
-    static let version = 1
+    static let version = 2
 }
 
 /// stdout에 JSONL 한 줄을 원자적으로 쓴다. 표준출력은 이벤트 스트림 전용이므로
@@ -21,12 +21,22 @@ enum Emitter {
         lock.unlock()
     }
 
-    static func ready(rawVideoPath: String, startedAt: Int) {
+    /// `list` 응답 — 선택 가능한 캡처 대상 목록. 각 원소는 {kind,id,title,width,height}.
+    static func targets(_ targets: [[String: Any]]) {
+        emit([
+            "type": "targets",
+            "protocolVersion": Protocol.version,
+            "targets": targets
+        ])
+    }
+
+    static func ready(rawVideoPath: String, startedAt: Int, target: [String: Any]) {
         emit([
             "type": "ready",
             "protocolVersion": Protocol.version,
             "rawVideoPath": rawVideoPath,
-            "startedAt": startedAt
+            "startedAt": startedAt,
+            "target": target
         ])
     }
 

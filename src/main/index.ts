@@ -7,6 +7,7 @@ import { Recorder } from './recorder'
 import { listRecordings, loadRecording, saveRecipe } from './storage'
 import {
   IpcChannel,
+  type CaptureTarget,
   type RecordingState,
   type RecordingSummary,
   type ExportSaveResult
@@ -70,23 +71,29 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle(IpcChannel.Start, async () => {
+  ipcMain.handle(IpcChannel.ListTargets, async () => {
+    return recorder.listTargets()
+  })
+
+  ipcMain.handle(IpcChannel.Start, async (_e, targetId: string) => {
     if (recorder.isRecording) return
 
     // 이벤트마다 상태를 밀면 마우스 이동에서 폭주하므로 카운트 갱신은 스로틀한다.
     let lastPush = 0
     let startedAt = 0
+    let target: CaptureTarget
 
-    await recorder.start({
+    await recorder.start(targetId, {
       onReady: (info) => {
         startedAt = info.startedAt
-        sendState({ status: 'recording', startedAt, eventCount: 0 })
+        target = info.target
+        sendState({ status: 'recording', startedAt, eventCount: 0, target })
       },
       onEvent: (count) => {
         const now = Date.now()
         if (now - lastPush < 400) return
         lastPush = now
-        sendState({ status: 'recording', startedAt, eventCount: count })
+        sendState({ status: 'recording', startedAt, eventCount: count, target })
       },
       onError: (code, message) => {
         sendState({ status: 'error', code, message })
@@ -98,6 +105,7 @@ function registerIpc(): void {
           folder: result.folder,
           durationMs: result.durationMs,
           eventCount: result.eventCount,
+          target: result.target,
           eventTrack: result.eventTrack
         })
       }
@@ -130,6 +138,7 @@ function registerIpc(): void {
       durationMs: loaded.durationMs,
       eventCount: loaded.eventCount,
       eventTrack: loaded.eventTrack,
+      target: loaded.target,
       ...(loaded.recipe ? { recipe: loaded.recipe } : {})
     })
   })

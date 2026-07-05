@@ -9,20 +9,34 @@
  * 본체는 stdin에 명령 한 줄을 쓴다. 문서화된 계약은 docs/sidecar-protocol.md 참고.
  */
 
-import type { CursorKind, MouseEventKind, MouseSample, EventTrack } from '../../shared/event-track'
+import type {
+  CursorKind,
+  MouseEventKind,
+  MouseSample,
+  EventTrack,
+  CaptureTarget,
+  CaptureTargetKind
+} from '../../shared/event-track'
 
-// 이벤트 트랙 도메인 타입은 shared에 있다 (자동 효과 파이프라인·미리보기도 공유).
+// 이벤트 트랙·캡처 대상 도메인 타입은 shared에 있다 (자동 효과 파이프라인·미리보기도 공유).
 // 기존 소비자와의 호환을 위해 여기서 재노출한다.
-export type { CursorKind, MouseEventKind, MouseSample, EventTrack }
+export type { CursorKind, MouseEventKind, MouseSample, EventTrack, CaptureTarget, CaptureTargetKind }
 
 /** 계약 버전. 호환 불가능한 변경 시 올린다. ready 메시지로 본체가 검증한다. */
-export const SIDECAR_PROTOCOL_VERSION = 1
+export const SIDECAR_PROTOCOL_VERSION = 2
 
 /** 본체 → 사이드카 명령. 사이드카 stdin에 한 줄씩 쓴다. */
 export const SidecarCommand = {
   /** 녹화 정지. 사이드카는 원본 파일을 마무리하고 stopped를 보낸 뒤 종료한다. */
   Stop: 'stop'
 } as const
+
+/** `list` 명령의 응답 — 선택 가능한 캡처 대상 목록. 이 스트림의 유일한 메시지. */
+export interface TargetListMessage {
+  type: 'targets'
+  protocolVersion: number
+  targets: CaptureTarget[]
+}
 
 /** 사이드카가 준비되어 원본 기록을 시작했음을 알린다. 스트림의 첫 메시지. */
 export interface ReadyMessage {
@@ -32,6 +46,8 @@ export interface ReadyMessage {
   rawVideoPath: string
   /** 녹화 시작 시점 (Unix epoch ms). 이후 event.t의 기준점. */
   startedAt: number
+  /** 실제로 캡처 중인 대상. 이후 event.x/y가 이 대상의 좌표계(좌상단 원점) 기준이다. */
+  target: CaptureTarget
 }
 
 /** 마우스 이벤트 하나 — 이벤트 트랙의 원소. */
@@ -40,7 +56,7 @@ export interface EventMessage {
   kind: MouseEventKind
   /** 녹화 시작(ready.startedAt)으로부터의 경과 시간 (ms). */
   t: number
-  /** 원본 좌표계 기준 위치 (좌상단 원점, 포인트 단위). */
+  /** 캡처 대상 좌표계 기준 위치 (대상의 좌상단이 원점, 포인트 단위). */
   x: number
   y: number
   cursor: CursorKind
@@ -62,6 +78,7 @@ export type SidecarErrorCode =
   | 'permission-denied' // ScreenCaptureKit 화면 녹화 권한 없음
   | 'no-display' // 캡처할 디스플레이를 찾지 못함
   | 'capture-failed' // ScreenCaptureKit 캡처 실패
+  | 'target-not-found' // --target으로 지정한 창/디스플레이가 사라짐
 
 export interface ErrorMessage {
   type: 'error'
@@ -69,13 +86,20 @@ export interface ErrorMessage {
   message: string
 }
 
-export type SidecarMessage = ReadyMessage | EventMessage | StoppedMessage | ErrorMessage
+export type SidecarMessage =
+  | ReadyMessage
+  | EventMessage
+  | StoppedMessage
+  | ErrorMessage
+  | TargetListMessage
 
 /** 녹화 참조 — 원본 영상 파일과 그 메타데이터를 가리킨다. */
 export interface RecordingRef {
   rawVideoPath: string
   startedAt: number
   durationMs: number
+  /** 녹화된 캡처 대상 (전체 화면 또는 특정 창). */
+  target: CaptureTarget
 }
 
 /** 세션 전체를 접은 결과. 성공 시 원본 참조와 이벤트 트랙이 분리되어 나온다. */
@@ -93,10 +117,12 @@ export class SidecarProtocolError extends Error {
 
 const CURSOR_KINDS: readonly CursorKind[] = ['arrow', 'pointer', 'ibeam']
 const EVENT_KINDS: readonly MouseEventKind[] = ['move', 'down', 'up']
+const TARGET_KINDS: readonly CaptureTargetKind[] = ['display', 'window']
 const ERROR_CODES: readonly SidecarErrorCode[] = [
   'permission-denied',
   'no-display',
-  'capture-failed'
+  'capture-failed',
+  'target-not-found'
 ]
 
 function isFiniteNumber(v: unknown): v is number {
@@ -105,6 +131,26 @@ function isFiniteNumber(v: unknown): v is number {
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0
+}
+
+/** 캡처 대상 하나를 검증·정규화한다. 계약을 벗어나면 SidecarProtocolError. */
+function parseTarget(raw: unknown, where: string): CaptureTarget {
+  if (typeof raw !== 'object' || raw === null)
+    throw new SidecarProtocolError(`${where}: target가 객체가 아니다`)
+  const t = raw as Record<string, unknown>
+  if (!TARGET_KINDS.includes(t.kind as CaptureTargetKind))
+    throw new SidecarProtocolError(`${where}: 알 수 없는 target.kind ${String(t.kind)}`)
+  if (!isNonEmptyString(t.id)) throw new SidecarProtocolError(`${where}: target.id 누락`)
+  if (typeof t.title !== 'string') throw new SidecarProtocolError(`${where}: target.title 누락`)
+  if (!isFiniteNumber(t.width) || !isFiniteNumber(t.height))
+    throw new SidecarProtocolError(`${where}: target 크기 누락`)
+  return {
+    kind: t.kind as CaptureTargetKind,
+    id: t.id,
+    title: t.title,
+    width: t.width,
+    height: t.height
+  }
 }
 
 /**
@@ -125,6 +171,17 @@ export function parseSidecarLine(line: string): SidecarMessage {
   const msg = raw as Record<string, unknown>
 
   switch (msg.type) {
+    case 'targets':
+      if (!isFiniteNumber(msg.protocolVersion))
+        throw new SidecarProtocolError('targets: protocolVersion 누락')
+      if (!Array.isArray(msg.targets))
+        throw new SidecarProtocolError('targets: targets 배열 누락')
+      return {
+        type: 'targets',
+        protocolVersion: msg.protocolVersion,
+        targets: msg.targets.map((t) => parseTarget(t, 'targets'))
+      }
+
     case 'ready':
       if (!isFiniteNumber(msg.protocolVersion))
         throw new SidecarProtocolError('ready: protocolVersion 누락')
@@ -136,7 +193,8 @@ export function parseSidecarLine(line: string): SidecarMessage {
         type: 'ready',
         protocolVersion: msg.protocolVersion,
         rawVideoPath: msg.rawVideoPath,
-        startedAt: msg.startedAt
+        startedAt: msg.startedAt,
+        target: parseTarget(msg.target, 'ready')
       }
 
     case 'event':
@@ -231,12 +289,14 @@ export function foldSidecarMessages(messages: SidecarMessage[]): SidecarOutcome 
     recording: {
       rawVideoPath: ready.rawVideoPath,
       startedAt: ready.startedAt,
-      durationMs: stopped.durationMs
+      durationMs: stopped.durationMs,
+      target: ready.target
     },
     eventTrack: {
       protocolVersion: ready.protocolVersion,
       startedAt: ready.startedAt,
       durationMs: stopped.durationMs,
+      target: ready.target,
       samples
     }
   }
