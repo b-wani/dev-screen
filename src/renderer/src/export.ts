@@ -1,17 +1,20 @@
 /**
  * 익스포트 인코딩 층 — 렌더 레시피를 원본에 적용해 최종 MP4 바이트를 만드는 후처리 렌더링.
  *
- * 미리보기와 "완전히 동일한" 샘플링 출력을 소비한다: 매 프레임 sampleRecipe로 카메라를
- * 얻고 drawSampledFrame으로 그린다 — 보이는 것과 내보내는 것이 같다(SPEC 후처리 렌더링 모델).
+ * 미리보기와 "완전히 동일한" 샘플링·그리기 경로를 공유한다: 매 프레임 sampleComposition으로
+ * 카메라·커서·클릭·배경/패딩·배지를 한 번에 얻고 drawComposition으로 그린다 — 보이는 것과
+ * 내보내는 것이 같다(SPEC 후처리 렌더링 모델·이슈 #8 수용 기준).
  * WebCodecs 인코딩·MP4 먹싱은 mediabunny(Chromium 미디어 스택)에 위임한다.
  *
+ * 트림 창 밖 프레임은 익스포트하지 않는다 — 최종 영상 길이는 트림된 길이(trim)를 따른다.
  * 이 층은 효과를 계산하지 않는다(recipe.ts가 굽는다) — 프레임을 뽑아 인코더에 밀 뿐이다.
  */
 
 import { Output, BufferTarget, Mp4OutputFormat, CanvasSource } from 'mediabunny'
-import { sampleRecipe, type RenderRecipe } from '../../shared/recipe'
+import { sampleComposition, type RenderRecipe } from '../../shared/recipe'
+import { trimmedDurationMs } from '../../shared/recipe.edit'
 import { resolveEncodeConfig, type ExportPreset } from '../../shared/export-preset'
-import { drawSampledFrame } from './frame'
+import { drawComposition } from './compose'
 
 export interface ExportProgress {
   renderedFrames: number
@@ -29,11 +32,18 @@ export async function renderRecipeToMp4(
   preset: ExportPreset,
   onProgress?: (p: ExportProgress) => void
 ): Promise<ArrayBuffer> {
-  const config = resolveEncodeConfig(preset, recipe.source, recipe.durationMs)
+  // 최종 영상 길이는 트림된 길이를 따른다 — 비트레이트 예산·프레임 수 모두 여기서 나온다.
+  const outputDurationMs = trimmedDurationMs(recipe)
+  const config = resolveEncodeConfig(preset, recipe.source, outputDurationMs)
 
   const canvas = document.createElement('canvas')
   canvas.width = config.width
   canvas.height = config.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('익스포트 캔버스 컨텍스트를 만들 수 없습니다')
+  // drawComposition은 원본(source) 좌표계로 그린다 — 프리셋 해상도로 축소된 캔버스에
+  // 맞도록 컨텍스트를 미리 스케일해, 미리보기와 동일한 합성을 그대로 담는다.
+  ctx.scale(config.width / recipe.source.width, config.height / recipe.source.height)
 
   const output = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })
   const canvasSource = new CanvasSource(canvas, { codec: config.codec, bitrate: config.bitrate })
@@ -44,14 +54,16 @@ export async function renderRecipeToMp4(
   video.pause()
 
   const frameDurationSec = 1 / config.fps
-  const totalFrames = Math.max(1, Math.round((recipe.durationMs / 1000) * config.fps))
+  const totalFrames = Math.max(1, Math.round((outputDurationMs / 1000) * config.fps))
 
   try {
     for (let i = 0; i < totalFrames; i++) {
       const tSec = i * frameDurationSec
-      await seekVideo(video, tSec)
-      const camera = sampleRecipe(recipe, tSec * 1000)
-      drawSampledFrame(canvas, video, camera, recipe.source)
+      // 출력 타임라인은 0부터지만, 원본에서는 트림 시작 지점부터 샘플링·시크한다.
+      const sourceMs = recipe.trim.startMs + tSec * 1000
+      await seekVideo(video, sourceMs / 1000)
+      const comp = sampleComposition(recipe, sourceMs)
+      drawComposition(ctx, video, comp, recipe.source)
       await canvasSource.add(tSec, frameDurationSec)
       onProgress?.({ renderedFrames: i + 1, totalFrames })
     }
