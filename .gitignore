@@ -1,0 +1,14 @@
+node_modules/
+out/
+dist/
+
+# Swift sidecar build artifacts
+src/sidecar/.build/
+src/sidecar/.swiftpm/
+
+# macOS
+.DS_Store
+
+# Local recordings (never commit user recordings)
+*.mp4
+*.gif
