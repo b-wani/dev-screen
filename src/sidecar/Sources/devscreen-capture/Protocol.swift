@@ -4,7 +4,7 @@ import Foundation
 /// 본체 쪽 계약은 src/main/sidecar/protocol.ts, 문서는 docs/sidecar-protocol.md.
 /// 여기에는 효과 로직이 없다 — 메시지를 stdout에 JSONL로 흘리기만 한다.
 enum Protocol {
-    static let version = 2
+    static let version = 3
 }
 
 /// stdout에 JSONL 한 줄을 원자적으로 쓴다. 표준출력은 이벤트 스트림 전용이므로
@@ -42,6 +42,11 @@ enum Emitter {
 
     static func event(kind: String, t: Int, x: Double, y: Double, cursor: String) {
         emit(["type": "event", "kind": kind, "t": t, "x": x, "y": y, "cursor": cursor])
+    }
+
+    /// 키 입력 하나 — 정규화된 조합 문자열(예: "⌘S"). 마우스 event와 분리된 스트림.
+    static func key(t: Int, combo: String) {
+        emit(["type": "key", "t": t, "combo": combo])
     }
 
     static func stopped(rawVideoPath: String, durationMs: Int, eventCount: Int) {

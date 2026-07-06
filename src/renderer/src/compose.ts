@@ -28,7 +28,7 @@ export function drawComposition(
   comp: FrameComposition,
   source: FrameSize
 ): void {
-  const { camera, cursor, click, background, badge } = comp
+  const { camera, cursor, click, background, badge, keyOverlay } = comp
   const W = source.width
   const H = source.height
 
@@ -61,6 +61,9 @@ export function drawComposition(
 
   // 뷰포트 크기 배지 + (있으면) 맥락 배지.
   if (badge.visible) drawBadges(ctx, badge, W, H)
+
+  // 키 입력 오버레이 — 화면 하단 중앙, 카메라 변환과 무관한 고정 좌표.
+  if (keyOverlay) drawKeyOverlay(ctx, keyOverlay, W, H)
 }
 
 /** 클릭 하이라이트: 퍼지는 리플(원). 커서 아래에 먼저 그린다. */
@@ -164,6 +167,47 @@ function drawPill(
   ctx.fillStyle = '#ffffff'
   ctx.fillText(label, boxX + padX, boxY + boxH / 2)
   return boxX
+}
+
+/**
+ * 화면 하단 중앙에 키 입력 오버레이(알약)를 그린다. 카메라 변환과 무관한 화면 고정 좌표라
+ * 확대 중에도 읽힌다. fade가 끝으로 갈수록 부드럽게 사라진다(잠깐 떴다 사라지는 자막).
+ */
+function drawKeyOverlay(
+  ctx: Ctx,
+  overlay: NonNullable<FrameComposition['keyOverlay']>,
+  W: number,
+  H: number
+): void {
+  // 앞 70%는 완전 불투명, 마지막 30% 동안 페이드아웃.
+  const opacity = overlay.fade < 0.7 ? 1 : Math.max(0, 1 - (overlay.fade - 0.7) / 0.3)
+  if (opacity <= 0) return
+
+  const fontSize = Math.round(Math.min(W, H) * 0.045)
+  const padX = fontSize * 0.8
+  const padY = fontSize * 0.5
+  const marginBottom = Math.min(W, H) * 0.08
+
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'center'
+
+  const textW = ctx.measureText(overlay.combo).width
+  const boxW = textW + padX * 2
+  const boxH = fontSize + padY * 2
+  const boxX = (W - boxW) / 2
+  const boxY = H - marginBottom - boxH
+  const radius = fontSize * 0.4
+
+  ctx.save()
+  ctx.globalAlpha = opacity
+  ctx.fillStyle = 'rgba(20, 20, 22, 0.82)'
+  roundRect(ctx, boxX, boxY, boxW, boxH, radius)
+  ctx.fill()
+
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(overlay.combo, W / 2, boxY + boxH / 2)
+  ctx.restore()
 }
 
 /** 둥근 사각형 경로. (구형 컨텍스트의 roundRect 미지원 대비) */

@@ -7,12 +7,14 @@
  */
 
 import type { CursorKind } from './event-track'
+import type { KeySample } from './event-track'
 import type {
   BackgroundStyle,
   BadgeConfig,
   ClickMark,
   CursorKeyframe,
   CursorTrack,
+  KeystrokeTrack,
   PanKeyframe,
   RenderRecipe,
   Trim,
@@ -76,8 +78,32 @@ function validateRecipe(raw: unknown): RenderRecipe {
     cursor: validateCursor(r.cursor),
     trim: validateTrim(r.trim),
     background: validateBackground(r.background),
-    badge: validateBadge(r.badge)
+    badge: validateBadge(r.badge),
+    keystrokes: validateKeystrokes(r.keystrokes)
   }
+}
+
+/**
+ * 키스트로크 트랙을 검증한다. v1/v2 레시피는 키 트랙이 없다 — 빈 키·토글 off로 채운다
+ * (스토리: v1 레시피는 토글 off·키 트랙 없음으로 정상 로드).
+ */
+function validateKeystrokes(raw: unknown): KeystrokeTrack {
+  if (raw === undefined || raw === null) return { keys: [], overlayVisible: false }
+  const k = asObject(raw, 'recipe.keystrokes')
+  if (typeof k.overlayVisible !== 'boolean') {
+    throw new RecipeParseError('recipe.keystrokes.overlayVisible 누락')
+  }
+  if (!Array.isArray(k.keys)) throw new RecipeParseError('recipe.keystrokes.keys 누락')
+  return { keys: k.keys.map(validateKeySample), overlayVisible: k.overlayVisible }
+}
+
+function validateKeySample(raw: unknown): KeySample {
+  const s = asObject(raw, 'keySample')
+  if (!isNum(s.t)) throw new RecipeParseError('keySample: t 누락')
+  if (typeof s.combo !== 'string' || s.combo.length === 0) {
+    throw new RecipeParseError('keySample: combo 누락')
+  }
+  return { t: s.t, combo: s.combo }
 }
 
 function validateCursor(raw: unknown): CursorTrack {

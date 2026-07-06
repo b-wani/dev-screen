@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { describe, it, expect } from 'vitest'
-import { deriveRecipe, sampleComposition, COMPOSITE_DEFAULTS } from './recipe'
+import { deriveRecipe, sampleComposition, COMPOSITE_DEFAULTS, KEYSTROKE_DEFAULTS } from './recipe'
+import type { RenderRecipe } from './recipe'
 import type { EventTrack } from './event-track'
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
@@ -66,6 +67,61 @@ describe('합성 파라미터 샘플링: (렌더 레시피, 시각 t) → 프레
   it('배경/패딩을 조절하면 샘플링 출력에 그대로 반영된다', () => {
     const styled = { ...recipe, background: { color: '#000000', padding: 0.2 } }
     expect(sampleComposition(styled, 0).background).toEqual({ color: '#000000', padding: 0.2 })
+  })
+
+  describe('키 오버레이 샘플링 (#25)', () => {
+    const hold = KEYSTROKE_DEFAULTS.holdMs
+    const withKeys = (keys: { t: number; combo: string }[], overlayVisible = true): RenderRecipe => ({
+      ...recipe,
+      keystrokes: { keys, overlayVisible }
+    })
+
+    it('활성 창 안이면 조합 문자열과 페이드 진행도를 낸다', () => {
+      const r = withKeys([{ t: 1000, combo: '⌘S' }])
+      // 방금 눌린 순간: fade 0.
+      expect(sampleComposition(r, 1000).keyOverlay).toEqual({ combo: '⌘S', fade: 0 })
+      // 창 중간: fade는 창 안 진행도.
+      const mid = sampleComposition(r, 1000 + hold / 2).keyOverlay
+      expect(mid?.combo).toBe('⌘S')
+      expect(mid?.fade).toBeCloseTo(0.5, 10)
+    })
+
+    it('활성 창 밖이면 비운다(null)', () => {
+      const r = withKeys([{ t: 1000, combo: '⌘S' }])
+      // 누르기 전.
+      expect(sampleComposition(r, 500).keyOverlay).toBeNull()
+      // 창이 끝난 뒤.
+      expect(sampleComposition(r, 1000 + hold).keyOverlay).toBeNull()
+    })
+
+    it('연속 키는 겹치지 않고 가장 최근 것을 표시한다', () => {
+      // 두 키가 창이 겹치도록 100ms 간격. 겹치는 시점엔 최근(둘째)만 표시.
+      const r = withKeys([
+        { t: 1000, combo: '⌘S' },
+        { t: 1100, combo: '⌥⌘I' }
+      ])
+      expect(sampleComposition(r, 1050).keyOverlay?.combo).toBe('⌘S')
+      // 둘째가 눌린 뒤에는 최근 것 우선.
+      expect(sampleComposition(r, 1150).keyOverlay?.combo).toBe('⌥⌘I')
+    })
+
+    it('오버레이 표시가 off면 항상 null', () => {
+      const r = withKeys([{ t: 1000, combo: '⌘S' }], false)
+      expect(sampleComposition(r, 1000).keyOverlay).toBeNull()
+    })
+
+    it('트림 창 밖이면 키 오버레이도 비운다', () => {
+      const r: RenderRecipe = {
+        ...withKeys([{ t: 1000, combo: '⌘S' }]),
+        trim: { startMs: 1500, endMs: recipe.durationMs }
+      }
+      // t=1000은 트림 시작 이전 → null.
+      expect(sampleComposition(r, 1000).keyOverlay).toBeNull()
+    })
+
+    it('키가 없으면 null (기본 유도 레시피)', () => {
+      expect(sampleComposition(recipe, 1000).keyOverlay).toBeNull()
+    })
   })
 
   it('배경/패딩·배지는 시각과 무관하게(줌 구간 안에서도) 합성 파라미터에 실린다', () => {

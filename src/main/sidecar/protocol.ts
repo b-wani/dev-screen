@@ -13,6 +13,7 @@ import type {
   CursorKind,
   MouseEventKind,
   MouseSample,
+  KeySample,
   EventTrack,
   CaptureTarget,
   CaptureTargetKind
@@ -20,10 +21,18 @@ import type {
 
 // 이벤트 트랙·캡처 대상 도메인 타입은 shared에 있다 (자동 효과 파이프라인·미리보기도 공유).
 // 기존 소비자와의 호환을 위해 여기서 재노출한다.
-export type { CursorKind, MouseEventKind, MouseSample, EventTrack, CaptureTarget, CaptureTargetKind }
+export type {
+  CursorKind,
+  MouseEventKind,
+  MouseSample,
+  KeySample,
+  EventTrack,
+  CaptureTarget,
+  CaptureTargetKind
+}
 
 /** 계약 버전. 호환 불가능한 변경 시 올린다. ready 메시지로 본체가 검증한다. */
-export const SIDECAR_PROTOCOL_VERSION = 2
+export const SIDECAR_PROTOCOL_VERSION = 3
 
 /** 본체 → 사이드카 명령. 사이드카 stdin에 한 줄씩 쓴다. */
 export const SidecarCommand = {
@@ -62,6 +71,18 @@ export interface EventMessage {
   cursor: CursorKind
 }
 
+/**
+ * 키 입력 하나 — 단축키·특수키의 정규화된 조합 문자열. 마우스 event와 분리된 스트림이다.
+ * 사이드카는 정규화된 조합 문자열만 스트리밍하고 효과 로직은 넣지 않는다(ADR 0001).
+ */
+export interface KeyMessage {
+  type: 'key'
+  /** 녹화 시작(ready.startedAt)으로부터의 경과 시간 (ms). */
+  t: number
+  /** 정규화된 조합 문자열 (예: "⌘S", "⌥⌘I", "Enter"). */
+  combo: string
+}
+
 /** 녹화가 정상 종료되고 원본 파일이 기록되었음을 알린다. 스트림의 마지막 메시지. */
 export interface StoppedMessage {
   type: 'stopped'
@@ -89,6 +110,7 @@ export interface ErrorMessage {
 export type SidecarMessage =
   | ReadyMessage
   | EventMessage
+  | KeyMessage
   | StoppedMessage
   | ErrorMessage
   | TargetListMessage
@@ -214,6 +236,11 @@ export function parseSidecarLine(line: string): SidecarMessage {
         cursor: msg.cursor as CursorKind
       }
 
+    case 'key':
+      if (!isFiniteNumber(msg.t)) throw new SidecarProtocolError('key: t 누락')
+      if (!isNonEmptyString(msg.combo)) throw new SidecarProtocolError('key: combo 누락')
+      return { type: 'key', t: msg.t, combo: msg.combo }
+
     case 'stopped':
       if (!isNonEmptyString(msg.rawVideoPath))
         throw new SidecarProtocolError('stopped: rawVideoPath 누락')
@@ -278,11 +305,16 @@ export function foldSidecarMessages(messages: SidecarMessage[]): SidecarOutcome 
     .filter((m): m is EventMessage => m.type === 'event')
     .map(({ t, kind, x, y, cursor }) => ({ t, kind, x, y, cursor }))
 
+  // eventCount 대조는 마우스 이벤트만 센다 — 키 이벤트는 별도 트랙으로 집계한다.
   if (samples.length !== stopped.eventCount) {
     throw new SidecarProtocolError(
       `이벤트 개수 불일치: 스트림 ${samples.length}, stopped.eventCount ${stopped.eventCount}`
     )
   }
+
+  const keys: KeySample[] = messages
+    .filter((m): m is KeyMessage => m.type === 'key')
+    .map(({ t, combo }) => ({ t, combo }))
 
   return {
     ok: true,
@@ -297,7 +329,8 @@ export function foldSidecarMessages(messages: SidecarMessage[]): SidecarOutcome 
       startedAt: ready.startedAt,
       durationMs: stopped.durationMs,
       target: ready.target,
-      samples
+      samples,
+      keys
     }
   }
 }

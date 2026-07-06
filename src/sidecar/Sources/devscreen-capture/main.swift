@@ -18,6 +18,7 @@ final class Session {
     let targetId: String
     let recorder: ScreenRecorder
     var tracker: MouseTracker?
+    var keyTracker: KeyTracker?
     var eventCount = 0
     var stopping = false
 
@@ -49,6 +50,12 @@ final class Session {
         }
         tracker.start()
         self.tracker = tracker
+        // 키 입력 오버레이용 — 단축키·특수키만 스트리밍한다(eventCount와 분리, 마우스만 집계).
+        let keyTracker = KeyTracker(startedAt: startedAt) { t, combo in
+            Emitter.key(t: t, combo: combo)
+        }
+        keyTracker.start()
+        self.keyTracker = keyTracker
         Emitter.ready(rawVideoPath: outputURL.path,
                       startedAt: Int((startedAt * 1000).rounded()),
                       target: target.meta)
@@ -58,6 +65,7 @@ final class Session {
         guard !stopping else { return }
         stopping = true
         tracker?.stop()
+        keyTracker?.stop()
         recorder.stop { [weak self] durationMs in
             guard let self else { exit(0) }
             Emitter.stopped(rawVideoPath: self.outputURL.path,

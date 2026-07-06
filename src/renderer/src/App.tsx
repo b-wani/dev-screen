@@ -366,6 +366,20 @@ function PreviewView({
               }
             />
           </label>
+          <label className="control control-check">
+            <input
+              type="checkbox"
+              checked={recipe.keystrokes.overlayVisible}
+              onChange={(e) =>
+                setRecipe((r) =>
+                  r
+                    ? { ...r, keystrokes: { ...r.keystrokes, overlayVisible: e.target.checked } }
+                    : r
+                )
+              }
+            />
+            <span>키 입력 오버레이</span>
+          </label>
         </fieldset>
       )}
       <dl className="meta">
