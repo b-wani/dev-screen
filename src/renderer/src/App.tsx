@@ -345,10 +345,26 @@ function PreviewView({
               type="checkbox"
               checked={recipe.badge.visible}
               onChange={(e) =>
-                setRecipe((r) => (r ? { ...r, badge: { visible: e.target.checked } } : r))
+                setRecipe((r) =>
+                  r ? { ...r, badge: { ...r.badge, visible: e.target.checked } } : r
+                )
               }
             />
             <span>뷰포트 크기 배지</span>
+          </label>
+          <label className="control">
+            <span>맥락 (브랜치/커밋)</span>
+            <input
+              type="text"
+              className="control-text"
+              placeholder="예: feat/v2-overlay @ 61e6fd6"
+              value={recipe.badge.contextLabel}
+              onChange={(e) =>
+                setRecipe((r) =>
+                  r ? { ...r, badge: { ...r.badge, contextLabel: e.target.value } } : r
+                )
+              }
+            />
           </label>
         </fieldset>
       )}

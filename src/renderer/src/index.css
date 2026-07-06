@@ -225,6 +225,16 @@ body {
   width: 140px;
 }
 
+.control-text {
+  width: 220px;
+  padding: 6px 10px;
+  border: 1px solid #3a3a3c;
+  border-radius: 6px;
+  background: #1c1c1e;
+  color: #f2f2f7;
+  font-size: 13px;
+}
+
 .scale-buttons {
   display: flex;
   gap: 8px;
