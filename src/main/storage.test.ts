@@ -34,7 +34,7 @@ const recipe: RenderRecipe = {
   },
   trim: { startMs: 250, endMs: 4750 },
   background: { color: '#1c1c1e', padding: 0.06 },
-  badge: { visible: true }
+  badge: { visible: true, contextLabel: '' }
 }
 
 function manifest(startedAt: number): RecordingManifest {

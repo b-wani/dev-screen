@@ -123,7 +123,8 @@ function validateBackground(raw: unknown): BackgroundStyle {
 function validateBadge(raw: unknown): BadgeConfig {
   const b = asObject(raw, 'recipe.badge')
   if (typeof b.visible !== 'boolean') throw new RecipeParseError('recipe.badge.visible 누락')
-  return { visible: b.visible }
+  // v1 레시피는 맥락 문자열이 없다 — 빈 문자열로 채운다.
+  return { visible: b.visible, contextLabel: typeof b.contextLabel === 'string' ? b.contextLabel : '' }
 }
 
 function isCursorKind(v: unknown): v is CursorKind {

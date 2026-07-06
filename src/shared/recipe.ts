@@ -102,6 +102,12 @@ export interface BackgroundStyle {
 export interface BadgeConfig {
   /** 배지 표시 여부. 렌더 레시피에 저장되어 미리보기·익스포트에 반영된다. */
   visible: boolean
+  /**
+   * 브랜치/커밋 등 맥락 문자열. 에디터에서 자유 입력하며 형식 제약이 없다(예:
+   * `feat/v2-overlay @ 61e6fd6`). 빈 문자열이면 맥락 배지를 그리지 않는다. git 자동
+   * 읽기·외부 연동 없이 수동 입력만 담는다.
+   */
+  contextLabel: string
 }
 
 /**
@@ -168,6 +174,8 @@ export interface BadgeState {
   visible: boolean
   /** 뷰포트 크기 라벨 (예: "1440×900"). 녹화된 화면 크기에서 유도. */
   label: string
+  /** 사용자 입력 맥락 문자열(브랜치/커밋 등). 빈 문자열이면 맥락 배지를 그리지 않는다. */
+  contextLabel: string
 }
 
 /**
@@ -229,7 +237,9 @@ export const COMPOSITE_DEFAULTS = {
   /** 기본 패딩 비율 (짧은 변의 6%). */
   padding: 0.06,
   /** 배지는 기본으로 켜 둔다. */
-  badgeVisible: true
+  badgeVisible: true,
+  /** 맥락 문자열 기본값 — 비어 있음(맥락 배지 숨김). */
+  contextLabel: ''
 } as const
 
 /**
@@ -290,7 +300,10 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
       color: COMPOSITE_DEFAULTS.backgroundColor,
       padding: COMPOSITE_DEFAULTS.padding
     },
-    badge: { visible: COMPOSITE_DEFAULTS.badgeVisible }
+    badge: {
+      visible: COMPOSITE_DEFAULTS.badgeVisible,
+      contextLabel: COMPOSITE_DEFAULTS.contextLabel
+    }
   }
 }
 
@@ -381,7 +394,8 @@ export function sampleComposition(recipe: RenderRecipe, t: number): FrameComposi
     background: recipe.background,
     badge: {
       visible: recipe.badge.visible,
-      label: `${recipe.source.width}×${recipe.source.height}`
+      label: `${recipe.source.width}×${recipe.source.height}`,
+      contextLabel: recipe.badge.contextLabel
     }
   }
 }

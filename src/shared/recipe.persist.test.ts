@@ -40,7 +40,7 @@ describe('레시피 직렬화 왕복: 저장 → 로드 후 동일한 샘플링 
       zoomSegments: [recipe.zoomSegments[1]], // 첫 구간 삭제, 둘째만 남김
       trim: { startMs: 500, endMs: recipe.durationMs - 500 }, // 앞뒤 트리밍
       background: { color: '#ff8800', padding: 0.2 }, // 배경색·패딩 변경
-      badge: { visible: false } // 배지 끔
+      badge: { visible: false, contextLabel: 'feat/v2 @ abc123' } // 배지 끔·맥락 입력
     }
     const restored = parseRecipe(serializeRecipe(edited))
     expect(restored).toEqual(edited)
@@ -81,6 +81,33 @@ describe('v1 레시피 하위호환: 구간 배율 (#23)', () => {
     const restored = parseRecipe(serializeRecipe(perSegment))
     expect(restored.zoomSegments.map((s) => s.scale)).toEqual([1.5, 2.5])
     expect(restored).toEqual(perSegment)
+  })
+})
+
+describe('v1 레시피 하위호환: 맥락 배지 (#24)', () => {
+  it('맥락 문자열이 없는 v1 레시피를 로드하면 빈 값으로 채워진다', () => {
+    const v1 = {
+      formatVersion: 1,
+      recipe: {
+        source,
+        zoomScale: 2,
+        durationMs: 5000,
+        zoomSegments: [],
+        cursor: { keyframes: [], clicks: [] },
+        trim: { startMs: 0, endMs: 5000 },
+        background: { color: '#1c1c1e', padding: 0.06 },
+        badge: { visible: true } // v1 — contextLabel 없음
+      }
+    }
+    const restored = parseRecipe(JSON.stringify(v1))
+    expect(restored.badge).toEqual({ visible: true, contextLabel: '' })
+  })
+
+  it('저장된 맥락 문자열이 왕복 후 그대로 복원된다', () => {
+    const withContext = { ...recipe, badge: { ...recipe.badge, contextLabel: 'feat/v2 @ abc123' } }
+    const restored = parseRecipe(serializeRecipe(withContext))
+    expect(restored.badge.contextLabel).toBe('feat/v2 @ abc123')
+    expect(restored).toEqual(withContext)
   })
 })
 

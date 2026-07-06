@@ -25,8 +25,8 @@ describe('합성 파라미터 샘플링: (렌더 레시피, 시각 t) → 프레
       color: COMPOSITE_DEFAULTS.backgroundColor,
       padding: COMPOSITE_DEFAULTS.padding
     })
-    // 배지: 기본 on, 라벨은 녹화된 화면 크기.
-    expect(comp.badge).toEqual({ visible: true, label: '1000×800' })
+    // 배지: 기본 on, 라벨은 녹화된 화면 크기, 맥락은 기본 빈 문자열.
+    expect(comp.badge).toEqual({ visible: true, label: '1000×800', contextLabel: '' })
   })
 
   it('배지 라벨은 녹화된 화면 크기(source) 기준으로 합성된다', () => {
@@ -37,11 +37,30 @@ describe('합성 파라미터 샘플링: (렌더 레시피, 시각 t) → 프레
   })
 
   it('배지를 끄면 샘플링 출력에 off가 반영된다', () => {
-    const off = { ...recipe, badge: { visible: false } }
+    const off = { ...recipe, badge: { ...recipe.badge, visible: false } }
     const comp = sampleComposition(off, 0)
     expect(comp.badge.visible).toBe(false)
     // off여도 라벨은 계산되어 있어, 켜는 순간 같은 문자열을 그린다.
     expect(comp.badge.label).toBe('1000×800')
+  })
+
+  it('맥락 문자열을 배지 상태에 싣는다 (#24)', () => {
+    const withContext = { ...recipe, badge: { ...recipe.badge, contextLabel: 'feat/v2 @ abc123' } }
+    const comp = sampleComposition(withContext, 0)
+    expect(comp.badge.contextLabel).toBe('feat/v2 @ abc123')
+    // 뷰포트 라벨과 함께 실린다.
+    expect(comp.badge.label).toBe('1000×800')
+  })
+
+  it('맥락 문자열이 비면 빈 값으로 낸다 (뷰포트 배지만) (#24)', () => {
+    const comp = sampleComposition(recipe, 0)
+    expect(comp.badge.contextLabel).toBe('')
+  })
+
+  it('맥락 문자열은 시각과 무관하게(줌 구간 안에서도) 실린다 (#24)', () => {
+    const withContext = { ...recipe, badge: { ...recipe.badge, contextLabel: '#24' } }
+    // 완전 줌인 시점에서도 그대로.
+    expect(sampleComposition(withContext, 1000).badge.contextLabel).toBe('#24')
   })
 
   it('배경/패딩을 조절하면 샘플링 출력에 그대로 반영된다', () => {
@@ -57,6 +76,6 @@ describe('합성 파라미터 샘플링: (렌더 레시피, 시각 t) → 프레
       color: COMPOSITE_DEFAULTS.backgroundColor,
       padding: COMPOSITE_DEFAULTS.padding
     })
-    expect(comp.badge).toEqual({ visible: true, label: '1000×800' })
+    expect(comp.badge).toEqual({ visible: true, label: '1000×800', contextLabel: '' })
   })
 })

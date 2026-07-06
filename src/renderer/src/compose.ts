@@ -59,8 +59,8 @@ export function drawComposition(
   if (click) drawClickHighlight(ctx, click, map)
   if (cursor) drawCursor(ctx, cursor, click, map)
 
-  // 뷰포트 크기 배지.
-  if (badge.visible) drawBadge(ctx, badge.label, W, H)
+  // 뷰포트 크기 배지 + (있으면) 맥락 배지.
+  if (badge.visible) drawBadges(ctx, badge, W, H)
 }
 
 /** 클릭 하이라이트: 퍼지는 리플(원). 커서 아래에 먼저 그린다. */
@@ -110,30 +110,60 @@ function drawArrowCursor(ctx: Ctx, tipX: number, tipY: number, size: number): vo
   ctx.restore()
 }
 
-/** 우하단에 뷰포트 크기 배지(둥근 알약)를 그린다. 크기는 프레임에 비례. */
-function drawBadge(ctx: Ctx, label: string, W: number, H: number): void {
+/**
+ * 우하단에 뷰포트 크기 배지를, 맥락 문자열이 있으면 그 왼쪽에 맥락 배지를 나란히 그린다.
+ * 두 배지는 배경색으로 구분한다 — 뷰포트는 반투명 검정, 맥락은 파란 액센트.
+ * 카메라 변환과 무관한 화면 고정 좌표에 그린다. 크기는 프레임에 비례.
+ */
+function drawBadges(
+  ctx: Ctx,
+  badge: FrameComposition['badge'],
+  W: number,
+  H: number
+): void {
   const fontSize = Math.round(Math.min(W, H) * 0.028)
   const padX = fontSize * 0.7
   const padY = fontSize * 0.45
   const margin = fontSize
+  const gap = fontSize * 0.5
+  const boxH = fontSize + padY * 2
+  const boxY = H - margin - boxH
+  const radius = boxH / 2
 
   ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'
 
+  // 우하단부터 왼쪽으로 채운다: 뷰포트 배지 먼저, 그 왼쪽에 맥락 배지.
+  let right = W - margin
+  right = drawPill(ctx, badge.label, right, boxY, boxH, padX, radius, 'rgba(0, 0, 0, 0.55)')
+  if (badge.contextLabel !== '') {
+    drawPill(ctx, badge.contextLabel, right - gap, boxY, boxH, padX, radius, 'rgba(10, 132, 255, 0.85)')
+  }
+}
+
+/** 오른쪽 가장자리 rightX에 알약 하나를 그리고, 그 왼쪽 가장자리 X를 반환한다. */
+function drawPill(
+  ctx: Ctx,
+  label: string,
+  rightX: number,
+  boxY: number,
+  boxH: number,
+  padX: number,
+  radius: number,
+  fill: string
+): number {
   const textW = ctx.measureText(label).width
   const boxW = textW + padX * 2
-  const boxH = fontSize + padY * 2
-  const boxX = W - margin - boxW
-  const boxY = H - margin - boxH
-  const radius = boxH / 2
+  const boxX = rightX - boxW
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'
+  ctx.fillStyle = fill
   roundRect(ctx, boxX, boxY, boxW, boxH, radius)
   ctx.fill()
 
   ctx.fillStyle = '#ffffff'
   ctx.fillText(label, boxX + padX, boxY + boxH / 2)
+  return boxX
 }
 
 /** 둥근 사각형 경로. (구형 컨텍스트의 roundRect 미지원 대비) */
