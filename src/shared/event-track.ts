@@ -43,6 +43,18 @@ export interface MouseSample {
 }
 
 /**
+ * 키 입력 하나 — 녹화 중 누른 단축키·특수키의 정규화된 조합 문자열.
+ * 프라이버시상 수식키(⌘⌥⇧⌃) 조합과 특수키(Enter/Tab/Esc/화살표/Delete 등)만 기록하고,
+ * 수식키 없는 일반 타이핑 문자는 담지 않는다. 마우스 이벤트와 분리 저장된다.
+ */
+export interface KeySample {
+  /** 녹화 시작(startedAt)으로부터의 경과 시간 (ms). */
+  t: number
+  /** 정규화된 조합 문자열 (예: "⌘S", "⌥⌘I", "Enter"). */
+  combo: string
+}
+
+/**
  * 이벤트 트랙 — 원본 영상과 분리 저장되는 마우스 이벤트 로그(events.json의 형태).
  * 자동 효과(줌 구간) 유도의 입력이 된다.
  */
@@ -57,4 +69,9 @@ export interface EventTrack {
    */
   target?: CaptureTarget
   samples: MouseSample[]
+  /**
+   * 키 입력 로그 — 단축키·특수키만. 마우스 samples와 분리한다. 사이드카 v3(프로토콜 3)가
+   * 채운다. 키 데이터 없이 만든 이벤트 트랙(v1/v2 픽스처)과의 호환을 위해 선택적이다.
+   */
+  keys?: KeySample[]
 }

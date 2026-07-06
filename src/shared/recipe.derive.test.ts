@@ -108,4 +108,43 @@ describe('자동 효과 유도: 이벤트 트랙 → 렌더 레시피', () => {
     expect(at15.zoomSegments.every((s) => s.scale === 1.5)).toBe(true)
     expect(at20.zoomSegments.every((s) => s.scale === 2.0)).toBe(true)
   })
+
+  it('키 입력을 키스트로크 트랙으로 담고, 오버레이는 기본 on이다 (#25)', () => {
+    const track: EventTrack = {
+      protocolVersion: 3,
+      startedAt: 0,
+      durationMs: 4000,
+      samples: [{ t: 1000, kind: 'down', x: 400, y: 300, cursor: 'pointer' }],
+      keys: [
+        { t: 1600, combo: '⌥⌘I' },
+        { t: 800, combo: '⌘S' }
+      ]
+    }
+    const recipe = deriveRecipe(track, { source })
+    // 키는 시간순으로 정렬되어 담긴다.
+    expect(recipe.keystrokes.keys).toEqual([
+      { t: 800, combo: '⌘S' },
+      { t: 1600, combo: '⌥⌘I' }
+    ])
+    expect(recipe.keystrokes.overlayVisible).toBe(true)
+  })
+
+  it('키 입력은 줌 구간을 만들지 않는다 — 마우스 클릭만 트리거 (#25)', () => {
+    // 클릭 없이 키만 있는 트랙: 줌 구간은 0개, 키스트로크 트랙만 채워진다.
+    const track: EventTrack = {
+      protocolVersion: 3,
+      startedAt: 0,
+      durationMs: 4000,
+      samples: [{ t: 500, kind: 'move', x: 10, y: 10, cursor: 'arrow' }],
+      keys: [{ t: 800, combo: '⌘S' }]
+    }
+    const recipe = deriveRecipe(track, { source })
+    expect(recipe.zoomSegments).toEqual([])
+    expect(recipe.keystrokes.keys).toHaveLength(1)
+  })
+
+  it('키 데이터가 없는 트랙(v1/v2)은 빈 키스트로크 트랙으로 유도된다 (#25)', () => {
+    const recipe = deriveRecipe(loadTrack('event-track-clicks.json'), { source })
+    expect(recipe.keystrokes.keys).toEqual([])
+  })
 })

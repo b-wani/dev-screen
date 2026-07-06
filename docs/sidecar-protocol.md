@@ -1,6 +1,6 @@
-# 사이드카 프로토콜 (v2)
+# 사이드카 프로토콜 (v3)
 
-Swift 캡처 사이드카(`devscreen-capture`)와 Electron 본체 사이의 계약. [ADR 0001](./adr/0001-electron-with-swift-capture-sidecar.md)에 따라 사이드카는 "한 번 만들면 안 건드리는" 층이며, 이 계약은 그 경계를 명시적으로 고정한다. 효과 로직은 이 경계 어디에도 없다 — 사이드카는 **원본 영상 기록**과 **마우스 이벤트 스트리밍**만 한다.
+Swift 캡처 사이드카(`devscreen-capture`)와 Electron 본체 사이의 계약. [ADR 0001](./adr/0001-electron-with-swift-capture-sidecar.md)에 따라 사이드카는 "한 번 만들면 안 건드리는" 층이며, 이 계약은 그 경계를 명시적으로 고정한다. 효과 로직은 이 경계 어디에도 없다 — 사이드카는 **원본 영상 기록**과 **마우스·키 이벤트 스트리밍**만 한다. 키 오버레이 계산은 전부 순수 코어(`recipe.ts`)에서 하며, 사이드카는 정규화된 조합 문자열만 흘린다.
 
 계약의 코드 표현:
 
@@ -45,7 +45,7 @@ devscreen-capture record --out <녹화 폴더> --target <id>   해당 대상 녹
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `type` | `"targets"` | |
-| `protocolVersion` | number | 계약 버전 (현재 `2`) |
+| `protocolVersion` | number | 계약 버전 (현재 `3`) |
 | `targets` | `CaptureTarget[]` | 전체 화면 + 선택 가능한 창 목록 |
 
 ### `ready`
@@ -55,7 +55,7 @@ devscreen-capture record --out <녹화 폴더> --target <id>   해당 대상 녹
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `type` | `"ready"` | |
-| `protocolVersion` | number | 계약 버전 (현재 `2`) |
+| `protocolVersion` | number | 계약 버전 (현재 `3`) |
 | `rawVideoPath` | string | 원본 영상이 기록될 절대 경로 |
 | `startedAt` | number | 녹화 시작 시점 (Unix epoch ms). 이후 `event.t`의 기준점 |
 | `target` | `CaptureTarget` | 실제로 캡처 중인 대상. 이후 `event.x/y`가 이 대상의 좌표계 기준 |
@@ -72,6 +72,18 @@ devscreen-capture record --out <녹화 폴더> --target <id>   해당 대상 녹
 | `x`, `y` | number | **캡처 대상 좌표계** 위치 (대상의 좌상단이 원점, 포인트). 창 녹화면 창 기준이라 자동 줌이 클릭 지점을 정확히 확대한다 |
 | `cursor` | `"arrow" \| "pointer" \| "ibeam"` | 커서 모양 (스켈레톤은 `arrow` 고정) |
 
+### `key`
+
+키 입력 하나 — 키 오버레이의 입력. 마우스 `event`와 **분리된** 스트림이며, `eventCount` 대조에 포함되지 않는다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `type` | `"key"` | |
+| `t` | number | `startedAt`으로부터 경과 시간 (ms) |
+| `combo` | string | 정규화된 조합 문자열 (예: `"⌘S"`, `"⌥⌘I"`, `"Enter"`) |
+
+**프라이버시 경계**: 수식키(⌘⌥⇧⌃) 조합과 특수키(Enter/Tab/Esc/화살표/Delete 등)만 캡처한다. 수식키 없는 일반 타이핑 문자(비밀번호·커밋 메시지 본문 등)는 **캡처하지 않는다** — `events.json`에도 남지 않는다. 키 입력은 자동 줌을 트리거하지 않는다(마우스 클릭만).
+
 ### `stopped`
 
 정상 종료, 원본 파일 기록 완료. 스트림의 마지막 메시지.
@@ -81,7 +93,7 @@ devscreen-capture record --out <녹화 폴더> --target <id>   해당 대상 녹
 | `type` | `"stopped"` | |
 | `rawVideoPath` | string | 원본 영상 최종 경로 (`ready`와 동일) |
 | `durationMs` | number | 녹화 길이 (ms) |
-| `eventCount` | number | 스트리밍한 이벤트 총 개수 (본체 집계와 대조) |
+| `eventCount` | number | 스트리밍한 **마우스** 이벤트 총 개수 (본체 집계와 대조). 키 이벤트는 세지 않는다 |
 
 ### `error`
 
@@ -98,6 +110,6 @@ devscreen-capture record --out <녹화 폴더> --target <id>   해당 대상 녹
 본체는 스트림 전체를 접어(`foldSidecarMessages`) 두 산출물로 **분리**한다:
 
 - **녹화 참조** `{ rawVideoPath, startedAt, durationMs, target }` — 원본 영상 파일과 녹화된 대상을 가리킨다.
-- **이벤트 트랙** `{ protocolVersion, startedAt, durationMs, target, samples[] }` — `events.json`으로 원본과 분리 저장되며, 이후 슬라이스에서 자동 효과(줌 구간) 유도의 입력이 된다. `target`은 좌표 공간의 경계를 알려 자동 줌의 클램핑에 쓰인다.
+- **이벤트 트랙** `{ protocolVersion, startedAt, durationMs, target, samples[], keys[] }` — `events.json`으로 원본과 분리 저장되며, 자동 효과(줌 구간) 유도의 입력이 된다. `target`은 좌표 공간의 경계를 알려 자동 줌의 클램핑에 쓰인다. `keys[]`는 키 오버레이의 입력으로 마우스 `samples[]`와 분리된다(줌 유도에는 쓰이지 않는다).
 
 `error`가 있으면 접기는 실패 결과를 반환하고, 본체는 사용자에게 안내를 표시한다.

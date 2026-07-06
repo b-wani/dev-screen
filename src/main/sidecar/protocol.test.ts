@@ -88,6 +88,56 @@ describe('사이드카 프로토콜 계약', () => {
     expect(outcome.eventTrack).not.toHaveProperty('rawVideoPath')
   })
 
+  it('키 입력 세션을 마우스 트랙과 분리된 키 트랙으로 접는다 (#25)', () => {
+    const outcome = foldSidecarMessages(parseFixture('session-with-keys.jsonl'))
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+
+    // 키는 이벤트 트랙의 별도 키 트랙으로 모인다 — 마우스 samples와 섞이지 않는다.
+    expect(outcome.eventTrack.keys).toEqual([
+      { t: 800, combo: '⌘S' },
+      { t: 1600, combo: '⌥⌘I' },
+      { t: 2400, combo: 'Enter' },
+      { t: 2900, combo: 'Esc' }
+    ])
+    // 마우스 samples에는 키가 섞이지 않는다.
+    expect(outcome.eventTrack.samples).toHaveLength(3)
+    expect(outcome.eventTrack.samples.every((s) => s.kind === 'move' || s.kind === 'down' || s.kind === 'up')).toBe(true)
+  })
+
+  it('eventCount 대조는 마우스만 세고, 키 이벤트와 무관하다 (#25)', () => {
+    // 픽스처 stopped.eventCount=3(마우스). 키 4개가 있어도 대조는 통과한다.
+    const outcome = foldSidecarMessages(parseFixture('session-with-keys.jsonl'))
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.eventTrack.samples).toHaveLength(3)
+    expect(outcome.eventTrack.keys).toHaveLength(4)
+  })
+
+  it('프라이버시 경계: 키 스트림은 단축키·특수키만 담는다 (일반 문자 미캡처) (#25)', () => {
+    const outcome = foldSidecarMessages(parseFixture('session-with-keys.jsonl'))
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    // 모든 조합은 수식키 기호를 포함하거나 특수키 이름이다 — 맨 소문자(일반 타이핑)는 없다.
+    const modifiers = /[⌘⌥⇧⌃]/
+    const specials = new Set(['Enter', 'Tab', 'Esc', 'Delete', '←', '→', '↑', '↓', 'Home', 'End', 'PageUp', 'PageDown'])
+    for (const k of outcome.eventTrack.keys ?? []) {
+      expect(modifiers.test(k.combo) || specials.has(k.combo)).toBe(true)
+    }
+  })
+
+  it('key 메시지를 파싱·검증한다 (불량 줄은 프로토콜 에러) (#25)', () => {
+    expect(parseSidecarLine('{"type":"key","t":800,"combo":"⌘S"}')).toEqual({
+      type: 'key',
+      t: 800,
+      combo: '⌘S'
+    })
+    // combo 누락·t 누락은 계약 위반.
+    expect(() => parseSidecarLine('{"type":"key","t":800}')).toThrow(SidecarProtocolError)
+    expect(() => parseSidecarLine('{"type":"key","combo":"⌘S"}')).toThrow(SidecarProtocolError)
+    expect(() => parseSidecarLine('{"type":"key","t":800,"combo":""}')).toThrow(SidecarProtocolError)
+  })
+
   it('권한 거부 세션은 실패 결과로 표면화된다 (조용히 실패하지 않는다)', () => {
     const outcome = foldSidecarMessages(parseFixture('permission-denied.jsonl'))
 

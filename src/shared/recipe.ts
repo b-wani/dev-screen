@@ -15,7 +15,7 @@
  * 튜닝 수치(배율·이징·타이밍·스무딩 강도·배경/패딩 기본값)는 여기 상수로 모은다.
  */
 
-import type { CursorKind, EventTrack, MouseSample } from './event-track'
+import type { CursorKind, EventTrack, KeySample, MouseSample } from './event-track'
 
 /** 원본 프레임 크기(px). 카메라 클램핑의 기준이 된다. */
 export interface FrameSize {
@@ -98,6 +98,17 @@ export interface BackgroundStyle {
   padding: number
 }
 
+/**
+ * 키스트로크 트랙 + 오버레이 표시 설정 — 이벤트 트랙의 키 로그에서 유도되어 레시피에 담긴다.
+ * 오버레이 계산(활성 창·페이드)은 샘플링 시점에 하므로, 여기엔 원본 키와 표시 토글만 둔다.
+ */
+export interface KeystrokeTrack {
+  /** 시간순 키 입력 (단축키·특수키만). */
+  keys: KeySample[]
+  /** 오버레이 표시 여부. 배지처럼 레시피에 저장되어 미리보기·익스포트에 반영된다. */
+  overlayVisible: boolean
+}
+
 /** 뷰포트 크기 배지 설정 — 녹화된 화면 크기를 최종 영상 구석에 표시한다. */
 export interface BadgeConfig {
   /** 배지 표시 여부. 렌더 레시피에 저장되어 미리보기·익스포트에 반영된다. */
@@ -128,6 +139,8 @@ export interface RenderRecipe {
   background: BackgroundStyle
   /** 뷰포트 크기 배지 설정. */
   badge: BadgeConfig
+  /** 키 입력 오버레이 — 키 트랙과 표시 토글. */
+  keystrokes: KeystrokeTrack
 }
 
 /** 시각 t에서의 카메라 상태 — 미리보기 층이 그대로 그린다. */
@@ -169,6 +182,14 @@ export interface FrameSample {
   click: ClickHighlight | null
 }
 
+/** 키 오버레이 샘플링 결과 — 시각 t에 표시할 조합 문자열과 페이드 진행도. */
+export interface KeyOverlayState {
+  /** 표시할 조합 문자열 (예: "⌘S"). */
+  combo: string
+  /** 페이드 진행도 0→1 (0 = 방금 눌림, 1 = 사라지기 직전). 그리기 층이 불투명도로 환산. */
+  fade: number
+}
+
 /** 배지 샘플링 결과 — 표시 여부와 표시할 문자열(라벨). */
 export interface BadgeState {
   visible: boolean
@@ -190,6 +211,8 @@ export interface FrameComposition {
   click: ClickHighlight | null
   background: BackgroundStyle
   badge: BadgeState
+  /** 시각 t에 표시할 키 오버레이. 활성 창 밖이거나 표시 off면 null. */
+  keyOverlay: KeyOverlayState | null
 }
 
 export interface DeriveConfig {
@@ -230,6 +253,14 @@ export const CURSOR_DEFAULTS = {
   clickHighlightMs: 400
 } as const
 
+/**
+ * 키 오버레이 튜닝 수치. 규칙만 테스트로 고정하고 값은 실험으로 정한다.
+ */
+export const KEYSTROKE_DEFAULTS = {
+  /** 키 하나가 화면에 떠 있는 시간(ms). 이 창 안이면 오버레이로 표시된다. */
+  holdMs: 1200
+} as const
+
 /** 배경/패딩·배지 기본값. 유도 시 레시피에 담기고, 경량 편집으로 바뀐다. */
 export const COMPOSITE_DEFAULTS = {
   /** 기본 배경색. */
@@ -239,7 +270,9 @@ export const COMPOSITE_DEFAULTS = {
   /** 배지는 기본으로 켜 둔다. */
   badgeVisible: true,
   /** 맥락 문자열 기본값 — 비어 있음(맥락 배지 숨김). */
-  contextLabel: ''
+  contextLabel: '',
+  /** 갓 유도한 레시피는 키 오버레이를 기본으로 켠다(키가 있으면 표시). */
+  keyOverlayVisible: true
 } as const
 
 /**
@@ -303,6 +336,11 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
     badge: {
       visible: COMPOSITE_DEFAULTS.badgeVisible,
       contextLabel: COMPOSITE_DEFAULTS.contextLabel
+    },
+    // 키 입력은 줌을 트리거하지 않는다(마우스 클릭만) — 오버레이 표시용으로만 담는다.
+    keystrokes: {
+      keys: [...(track.keys ?? [])].sort((a, b) => a.t - b.t),
+      overlayVisible: COMPOSITE_DEFAULTS.keyOverlayVisible
     }
   }
 }
@@ -396,8 +434,29 @@ export function sampleComposition(recipe: RenderRecipe, t: number): FrameComposi
       visible: recipe.badge.visible,
       label: `${recipe.source.width}×${recipe.source.height}`,
       contextLabel: recipe.badge.contextLabel
+    },
+    keyOverlay: sampleKeyOverlay(recipe, t)
+  }
+}
+
+/**
+ * 시각 t에 표시할 키 오버레이를 고른다. 표시 off·트림 밖·활성 키 없음이면 null.
+ * holdMs 창 안에 든 가장 최근 키를 표시하므로(최근 우선), 연속 키는 겹치지 않고
+ * 순서대로 나타난다. 페이드는 창 안 진행도(0→1)로 낸다.
+ */
+function sampleKeyOverlay(recipe: RenderRecipe, t: number): KeyOverlayState | null {
+  const ks = recipe.keystrokes
+  if (!ks.overlayVisible) return null
+  if (t < recipe.trim.startMs || t > recipe.trim.endMs) return null
+
+  const hold = KEYSTROKE_DEFAULTS.holdMs
+  for (let i = ks.keys.length - 1; i >= 0; i--) {
+    const k = ks.keys[i]
+    if (t >= k.t && t < k.t + hold) {
+      return { combo: k.combo, fade: (t - k.t) / hold }
     }
   }
+  return null
 }
 
 /**

@@ -111,6 +111,51 @@ describe('v1 레시피 하위호환: 맥락 배지 (#24)', () => {
   })
 })
 
+describe('v1 레시피 하위호환: 키 오버레이 (#25)', () => {
+  it('키스트로크 트랙이 없는 v1 레시피를 로드하면 토글 off·빈 키 트랙으로 채워진다', () => {
+    const v1 = {
+      formatVersion: 1,
+      recipe: {
+        source,
+        zoomScale: 2,
+        durationMs: 5000,
+        zoomSegments: [],
+        cursor: { keyframes: [], clicks: [] },
+        trim: { startMs: 0, endMs: 5000 },
+        background: { color: '#1c1c1e', padding: 0.06 },
+        badge: { visible: true }
+        // keystrokes 없음 (v1)
+      }
+    }
+    const restored = parseRecipe(JSON.stringify(v1))
+    expect(restored.keystrokes).toEqual({ keys: [], overlayVisible: false })
+  })
+
+  it('저장된 키 트랙·토글이 왕복 후 그대로 복원된다', () => {
+    const withKeys = {
+      ...recipe,
+      keystrokes: {
+        keys: [
+          { t: 800, combo: '⌘S' },
+          { t: 1600, combo: '⌥⌘I' }
+        ],
+        overlayVisible: true
+      }
+    }
+    const restored = parseRecipe(serializeRecipe(withKeys))
+    expect(restored.keystrokes).toEqual(withKeys.keystrokes)
+    expect(restored).toEqual(withKeys)
+  })
+
+  it('키 combo가 빈 문자열이면 파싱을 거부한다', () => {
+    const broken = {
+      ...recipe,
+      keystrokes: { keys: [{ t: 100, combo: '' }], overlayVisible: true }
+    }
+    expect(() => parseRecipe(serializeRecipe(broken))).toThrow(RecipeParseError)
+  })
+})
+
 describe('레시피 파싱 검증', () => {
   it('JSON이 아니면 던진다', () => {
     expect(() => parseRecipe('not json')).toThrow(RecipeParseError)
