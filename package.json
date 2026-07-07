@@ -19,7 +19,8 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
     "test:watch": "vitest",
-    "sidecar:build": "bash src/sidecar/build.sh"
+    "sidecar:build": "bash src/sidecar/build.sh",
+    "icons:build": "bash scripts/build-icons.sh"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.1",

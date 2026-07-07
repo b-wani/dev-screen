@@ -7,7 +7,8 @@ import {
   protocol,
   net,
   systemPreferences,
-  desktopCapturer
+  desktopCapturer,
+  nativeImage
 } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -41,6 +42,16 @@ function sidecarPath(): string {
   return app.isPackaged
     ? join(process.resourcesPath, 'devscreen-capture')
     : join(app.getAppPath(), 'src/sidecar/.build/devscreen-capture')
+}
+
+/**
+ * 브랜드 앱 아이콘(1024px PNG) 경로. `scripts/build-icons.sh` 산출물이며,
+ * 사이드카와 같은 규칙으로 해석한다 — 패키징 전에는 저장소 루트에서 읽는다.
+ */
+function brandIconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'assets/brand/icon.png')
+    : join(app.getAppPath(), 'assets/brand/icon.png')
 }
 
 /** 절대 경로를 미리보기용 devscreen-media URL로 만든다. */
@@ -82,6 +93,7 @@ function createWindow(): void {
     height: 680,
     show: false,
     title: 'dev-screen',
+    icon: brandIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -211,6 +223,12 @@ function registerIpc(): void {
 }
 
 app.whenReady().then(() => {
+  // dev 실행에서도 Dock 에 브랜드 아이콘이 뜨도록 지정한다(패키징 전 기본 Electron 아이콘 대체).
+  if (process.platform === 'darwin' && app.dock) {
+    const icon = nativeImage.createFromPath(brandIconPath())
+    if (!icon.isEmpty()) app.dock.setIcon(icon)
+  }
+
   protocol.handle(MEDIA_SCHEME, async (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))
