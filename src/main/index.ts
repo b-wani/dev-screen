@@ -7,7 +7,8 @@ import {
   protocol,
   net,
   systemPreferences,
-  desktopCapturer
+  desktopCapturer,
+  nativeImage
 } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -26,7 +27,7 @@ import type { RenderRecipe } from '../shared/recipe'
 import type { ExportFormat } from '../shared/export-preset'
 
 /** 원본 영상 파일을 렌더러 미리보기에 안전하게 공급하는 커스텀 스킴. */
-const MEDIA_SCHEME = 'devscreen-media'
+const MEDIA_SCHEME = 'recap-media'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -39,11 +40,21 @@ let mainWindow: BrowserWindow | null = null
 
 function sidecarPath(): string {
   return app.isPackaged
-    ? join(process.resourcesPath, 'devscreen-capture')
-    : join(app.getAppPath(), 'src/sidecar/.build/devscreen-capture')
+    ? join(process.resourcesPath, 'recap-capture')
+    : join(app.getAppPath(), 'src/sidecar/.build/recap-capture')
 }
 
-/** 절대 경로를 미리보기용 devscreen-media URL로 만든다. */
+/**
+ * 브랜드 앱 아이콘(1024px PNG) 경로. `scripts/build-icons.sh` 산출물이며,
+ * 사이드카와 같은 규칙으로 해석한다 — 패키징 전에는 저장소 루트에서 읽는다.
+ */
+function brandIconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'assets/brand/icon.png')
+    : join(app.getAppPath(), 'assets/brand/icon.png')
+}
+
+/** 절대 경로를 미리보기용 recap-media URL로 만든다. */
 function mediaUrl(filePath: string): string {
   return `${MEDIA_SCHEME}://file/${encodeURIComponent(filePath)}`
 }
@@ -83,7 +94,8 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 560,
     show: false,
-    title: 'dev-screen',
+    title: 'Recap',
+    icon: brandIconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
@@ -212,7 +224,17 @@ function registerIpc(): void {
   })
 }
 
+// dev 모드에서도 메뉴바·Dock·창 타이틀이 제품명으로 뜨도록 앱 이름을 고정한다
+// (패키징 전에는 package.json name이 소문자 "recap"으로 잡히기 때문).
+app.setName('Recap')
+
 app.whenReady().then(() => {
+  // dev 실행에서도 Dock 에 브랜드 아이콘이 뜨도록 지정한다(패키징 전 기본 Electron 아이콘 대체).
+  if (process.platform === 'darwin' && app.dock) {
+    const icon = nativeImage.createFromPath(brandIconPath())
+    if (!icon.isEmpty()) app.dock.setIcon(icon)
+  }
+
   protocol.handle(MEDIA_SCHEME, async (request) => {
     const url = new URL(request.url)
     const filePath = decodeURIComponent(url.pathname.replace(/^\//, ''))

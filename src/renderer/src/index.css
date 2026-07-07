@@ -1,25 +1,50 @@
 :root {
   color-scheme: dark;
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
 
-  /* 색상 — surface 단계 (뒤로 갈수록 밝다), 텍스트 단계, 강조/위험/경고 */
-  --surface-0: #1c1c1e;
-  --surface-1: #2c2c2e;
-  --surface-2: #3a3a3c;
-  --surface-3: #48484a;
-  --border: #3a3a3c;
-  --border-soft: rgba(255, 255, 255, 0.08);
+  /* Color — 깊은 모노크롬 뉴트럴 (DESIGN.md 토큰) */
+  --bg: #0a0a0b;
+  --surface: #141415;
+  --surface-2: #1a1a1c;
+  --surface-3: #232326;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text-1: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #6e6e73;
 
-  --text-1: #f2f2f7;
-  --text-2: #aeaeb2;
-  --text-3: #8e8e93;
+  /* REC 레드 — 성역(녹화·삭제 전용) */
+  --rec: #ff453a;
+  --rec-hover: #ff5a4f;
 
-  --accent: #0a84ff;
-  --accent-soft: rgba(10, 132, 255, 0.15);
-  --danger: #ff453a;
-  --warning: #ff9f0a;
+  /* Primary(화이트) — 주요 액션·활성 선택 */
+  --primary: #f5f5f7;
+  --primary-ink: #0a0a0b;
+  --primary-hover: #e4e4e7;
 
-  /* 간격 스케일 */
+  /* 타임라인 줌 구간 — 뉴트럴(파랑 폐지) */
+  --zoom: #55555a;
+  --zoom-hover: #6a6a70;
+
+  /* 경고·트림 핸들 — 앰버(레드 아님) */
+  --warn: #ff9f0a;
+
+  /* Typography */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 20px;
+  --text-xl: 40px;
+
+  /* Radius */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 12px;
+  --radius-full: 999px;
+
+  /* Spacing */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -27,23 +52,7 @@
   --space-5: 24px;
   --space-6: 32px;
 
-  /* 라운딩 스케일 */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-full: 999px;
-
-  /* 그림자 */
-  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.45);
-
-  /* 타이포 크기 */
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
-  --text-md: 15px;
-  --text-lg: 20px;
-  --text-xl: 40px;
+  font-family: var(--font-ui);
 }
 
 * {
@@ -52,7 +61,7 @@
 
 body {
   margin: 0;
-  background: var(--surface-0);
+  background: var(--bg);
   color: var(--text-1);
 }
 
@@ -95,9 +104,9 @@ body {
   font-size: var(--text-md);
   font-weight: 600;
   padding: var(--space-3) 28px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-3);
   color: var(--text-1);
   cursor: pointer;
 }
@@ -119,23 +128,44 @@ body {
 
 .btn-ghost {
   background: transparent;
+  border-color: transparent;
   color: var(--text-2);
 }
 
 .btn-ghost:hover {
-  background: var(--surface-1);
+  background: var(--surface-2);
   filter: none;
 }
 
+/* 녹화 전용 레드 (레드 성역 원칙) */
 .btn-record,
 .btn-stop {
-  background: var(--danger);
-  color: white;
+  background: var(--rec);
+  border-color: transparent;
+  color: #fff;
 }
 
+.btn-record:hover,
+.btn-stop:hover {
+  background: var(--rec-hover);
+  filter: none;
+}
+
+.btn-record:disabled {
+  background: var(--surface-3);
+  color: var(--text-3);
+}
+
+/* 익스포트 — 주요 액션(화이트 primary). */
 .btn-export {
-  background: var(--accent);
-  color: white;
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--primary-ink);
+}
+
+.btn-export:hover {
+  background: var(--primary-hover);
+  filter: none;
 }
 
 /* ── 녹화 중 화면 ─────────────────────────────────── */
@@ -157,7 +187,7 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--danger);
+  background: var(--rec);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
@@ -172,10 +202,11 @@ body {
 }
 
 .rec-time {
+  font-family: var(--font-mono);
   font-size: var(--text-xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--text-1);
+  color: var(--rec);
   letter-spacing: 0.02em;
 }
 
@@ -210,17 +241,16 @@ body {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface);
   color: var(--text-1);
   cursor: pointer;
   text-align: left;
 }
 
 .recent-item:hover {
-  background: var(--surface-2);
-  border-color: var(--border-soft);
+  background: var(--surface-3);
 }
 
 .recent-name {
@@ -231,6 +261,7 @@ body {
 .recent-meta {
   font-size: var(--text-xs);
   color: var(--text-3);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -267,20 +298,23 @@ body {
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-1);
+  border-radius: var(--radius-m);
+  background: var(--surface);
   color: var(--text-1);
   cursor: pointer;
   text-align: left;
 }
 
 .target-card:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 
+/* 선택 상태 — 화이트 강조(파랑 폐지). */
 .target-card.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--surface-3);
+  border-color: transparent;
+  outline: 1px solid var(--text-1);
+  outline-offset: -1px;
 }
 
 .target-card-icon {
@@ -306,6 +340,7 @@ body {
 .target-card-dim {
   font-size: var(--text-xs);
   color: var(--text-3);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -341,6 +376,7 @@ body {
 }
 
 .editor-bar-meta .len {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-1);
   font-weight: 600;
@@ -368,8 +404,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
   overflow: hidden;
 }
 
@@ -389,8 +426,9 @@ body {
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3);
-  background: var(--surface-1);
-  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
   overflow-y: auto;
 }
 
@@ -401,21 +439,21 @@ body {
   height: 44px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-1);
+  border-radius: var(--radius-s);
+  background: var(--surface);
   color: var(--text-2);
   cursor: pointer;
   font-size: var(--text-base);
 }
 
 .sidebar-toggle:hover {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 
 .side-section {
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
   padding: var(--space-3);
   margin: 0;
   display: flex;
@@ -461,11 +499,12 @@ body {
   cursor: pointer;
 }
 
-/* 수치 병기 — 슬라이더 레이블 옆 현재값 */
+/* 수치 병기 — 슬라이더 레이블 옆 현재값 (모노스페이스 규칙) */
 .control-value {
   font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text-1);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -474,7 +513,7 @@ body {
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-s);
   background: none;
   cursor: pointer;
 }
@@ -487,8 +526,8 @@ body {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface-1);
+  border-radius: var(--radius-s);
+  background: var(--surface);
   color: var(--text-1);
   font-size: var(--text-sm);
 }
@@ -502,13 +541,22 @@ body {
   flex: 1;
   padding: var(--space-2) 0;
   font-size: var(--text-sm);
-  background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  border-radius: var(--radius-s);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
+/* 활성 선택 — 화이트 primary */
 .btn-scale.is-active {
-  background: var(--accent);
-  color: white;
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--primary-ink);
+}
+
+.btn-scale.is-active:hover {
+  background: var(--primary-hover);
+  filter: none;
 }
 
 /* ── 익스포트 ─────────────────────────────────────── */
@@ -539,13 +587,14 @@ body {
 .progress-bar {
   height: 6px;
   border-radius: var(--radius-full);
-  background: var(--surface-2);
+  background: var(--surface-3);
   overflow: hidden;
 }
 
+/* 진행 바 채움 — 주요 액션이므로 화이트(파랑 폐지). */
 .progress-fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--primary);
   border-radius: var(--radius-full);
   transition: width 0.15s linear;
 }
@@ -566,6 +615,7 @@ body {
 .export-done-size {
   font-weight: 600;
   color: var(--text-1);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -579,7 +629,7 @@ body {
 }
 
 .export-warn {
-  color: var(--warning);
+  color: var(--warn);
   font-size: var(--text-xs);
 }
 
@@ -593,8 +643,8 @@ body {
 .tl-track {
   position: relative;
   height: 56px;
-  border-radius: var(--radius-md);
-  background: var(--surface-1);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
   overflow: hidden;
   touch-action: none;
 }
@@ -608,26 +658,25 @@ body {
   pointer-events: none;
 }
 
-/* 줌 구간 블록. */
+/* 줌 구간 블록 — 뉴트럴(파랑 폐지). */
 .tl-seg {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
-  min-width: 8px;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  min-width: var(--space-2);
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: white;
+  border-radius: var(--radius-s);
+  background: var(--zoom);
+  color: var(--text-1);
   font-size: var(--text-xs);
   cursor: grab;
   touch-action: none;
-  box-shadow: var(--shadow-1);
 }
 
 .tl-seg:hover {
-  filter: brightness(1.12);
+  background: var(--zoom-hover);
 }
 
 .tl-seg.is-selected {
@@ -642,6 +691,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 0 var(--space-1);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -673,14 +723,15 @@ body {
 
 .tl-seg-edge-start {
   left: 0;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  border-radius: var(--radius-s) 0 0 var(--radius-s);
 }
 
 .tl-seg-edge-end {
   right: 0;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: 0 var(--radius-s) var(--radius-s) 0;
 }
 
+/* 삭제 — 파괴적 액션(레드 허용). */
 .tl-seg-del {
   position: absolute;
   top: -8px;
@@ -690,23 +741,22 @@ body {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--danger);
-  color: white;
+  background: var(--rec);
+  color: #fff;
   font-size: var(--text-base);
   line-height: 1;
   cursor: pointer;
   z-index: 3;
-  box-shadow: var(--shadow-1);
 }
 
-/* 트림 핸들. */
+/* 트림 핸들 — 앰버. */
 .tl-trim-handle {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 8px;
   margin-left: -4px;
-  background: var(--warning);
+  background: var(--warn);
   cursor: ew-resize;
   touch-action: none;
   display: flex;
@@ -757,6 +807,7 @@ body {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--text-1);
+  font-variant-numeric: tabular-nums;
 }
 
 .meta-sub {
@@ -765,7 +816,7 @@ body {
 }
 
 .meta .path {
-  font-family: 'SF Mono', monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-2);
   word-break: break-all;
@@ -777,7 +828,7 @@ body {
 }
 
 .error h2 {
-  color: var(--warning);
+  color: var(--warn);
 }
 
 .err-message {
@@ -787,7 +838,7 @@ body {
 
 .steps {
   text-align: left;
-  color: #d1d1d6;
+  color: var(--text-1);
   line-height: 1.7;
   max-width: 460px;
 }

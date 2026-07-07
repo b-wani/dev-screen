@@ -41,13 +41,13 @@ type ExportStatus =
 export default function App(): JSX.Element {
   const [state, setState] = useState<RecordingState>({ status: 'idle' })
 
-  useEffect(() => window.devScreen.onStateChange(setState), [])
+  useEffect(() => window.recap.onStateChange(setState), [])
 
   const goIdle = (): void => setState({ status: 'idle' })
 
   return (
     <main className="app">
-      <h1 className="title">dev-screen</h1>
+      <h1 className="title">Recap</h1>
       {state.status === 'idle' && <IdleView />}
       {state.status === 'recording' && <RecordingView state={state} />}
       {state.status === 'preview' && <PreviewView state={state} onExit={goIdle} />}
@@ -74,7 +74,7 @@ function IdleView(): JSX.Element {
   const loadTargets = (): void => {
     setLoadError(null)
     setTargets(null)
-    window.devScreen
+    window.recap
       .listTargets()
       .then((list) => {
         setTargets(list)
@@ -87,7 +87,7 @@ function IdleView(): JSX.Element {
 
   // 앱 시작 시 로컬에 저장된 최근 녹화를 불러온다 (재시작 후 다시 열기).
   useEffect(() => {
-    window.devScreen.listRecordings().then(setRecent)
+    window.recap.listRecordings().then(setRecent)
   }, [])
 
   if (loadError) {
@@ -133,7 +133,7 @@ function IdleView(): JSX.Element {
       <button
         className="btn btn-record"
         disabled={selectedId === ''}
-        onClick={() => window.devScreen.start(selectedId)}
+        onClick={() => window.recap.start(selectedId)}
       >
         ● 녹화 시작
       </button>
@@ -143,7 +143,7 @@ function IdleView(): JSX.Element {
           <ul className="recent-list">
             {recent.map((r) => (
               <li key={r.folder}>
-                <button className="recent-item" onClick={() => window.devScreen.openRecording(r.folder)}>
+                <button className="recent-item" onClick={() => window.recap.openRecording(r.folder)}>
                   <span className="recent-name">{formatDate(r.startedAt)}</span>
                   <span className="recent-meta">
                     {formatElapsed(r.durationMs)} · 이벤트 {r.eventCount}개
@@ -222,7 +222,7 @@ function RecordingView({
         {state.target.kind === 'display' ? '전체 화면' : '창'}: {state.target.title} · 마우스 이벤트{' '}
         {state.eventCount}개 기록됨
       </p>
-      <button className="btn btn-stop" onClick={() => window.devScreen.stop()}>
+      <button className="btn btn-stop" onClick={() => window.recap.stop()}>
         ■ 정지
       </button>
     </section>
@@ -248,7 +248,7 @@ function PreviewView({
   // 편집 상태는 그대로 녹화 폴더에 저장해 다시 열었을 때 복원되게 한다(이슈 #9 영속화).
   useEffect(() => {
     recipeRef.current = recipe
-    if (recipe) void window.devScreen.saveRecipe(state.folder, recipe)
+    if (recipe) void window.recap.saveRecipe(state.folder, recipe)
   }, [recipe, state.folder])
 
   // 영상 메타데이터가 오면(원본 크기 확정) 렌더 레시피를 확정한다.
@@ -307,7 +307,7 @@ function PreviewView({
       const bytes = await render(video, recipe, GITHUB_PRESET, (p) =>
         setExportStatus({ phase: 'encoding', format, ...p })
       )
-      const { path, sizeBytes } = await window.devScreen.saveExport(bytes, state.folder, format)
+      const { path, sizeBytes } = await window.recap.saveExport(bytes, state.folder, format)
       setExportStatus({
         phase: 'done',
         format,
@@ -354,7 +354,7 @@ function PreviewView({
             <span className="meta-sub">(원본 {formatElapsed(state.durationMs)})</span>
           )}
         </div>
-        <button className="btn btn-record btn-sm" onClick={() => window.devScreen.start(state.target.id)}>
+        <button className="btn btn-record btn-sm" onClick={() => window.recap.start(state.target.id)}>
           ● 같은 대상 다시 녹화
         </button>
       </header>
@@ -559,10 +559,10 @@ function ExportPanel({
           <p className="export-warn">⚠ {limitLabel(status.format)}을 초과했습니다</p>
         )}
         <div className="export-actions">
-          <button className="btn btn-sm" onClick={() => window.devScreen.revealExport(status.path)}>
+          <button className="btn btn-sm" onClick={() => window.recap.revealExport(status.path)}>
             Finder에서 열기
           </button>
-          <button className="btn btn-sm" onClick={() => window.devScreen.copyExportPath(status.path)}>
+          <button className="btn btn-sm" onClick={() => window.recap.copyExportPath(status.path)}>
             경로 복사
           </button>
         </div>
@@ -746,7 +746,7 @@ function ErrorView({
       {isPermission && (
         <ol className="steps">
           <li>시스템 설정 → 개인정보 보호 및 보안 → 화면 기록을 엽니다.</li>
-          <li>목록에서 dev-screen을 켭니다.</li>
+          <li>목록에서 Recap을 켭니다.</li>
           <li>앱을 다시 실행한 뒤 아래 버튼으로 재시도합니다.</li>
         </ol>
       )}
