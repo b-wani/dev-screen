@@ -7,9 +7,9 @@
   </defs>
   <!-- self-contained dark backdrop so the light wordmark reads on any theme (GitHub 배너) -->
   <rect x="0" y="0" width="720" height="200" rx="28" fill="#0a0a0b"/>
-  <!-- symbol: closed ring + REC dot -->
+  <!-- symbol: ring with gap at 12 o'clock + REC dot -->
   <g>
-    <circle cx="100" cy="100" r="62" fill="none" stroke="#e7e8ea" stroke-width="19"/>
+    <path d="M78.8 41.7 A62 62 0 1 0 121.2 41.7" fill="none" stroke="#e7e8ea" stroke-width="19" stroke-linecap="round"/>
     <circle cx="100" cy="100" r="34" fill="url(#wf-dot)"/>
   </g>
   <!-- wordmark -->

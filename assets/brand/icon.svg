@@ -11,8 +11,8 @@
   </defs>
   <rect width="1024" height="1024" rx="229" fill="url(#f-bg)"/>
   <rect x="0.5" y="0.5" width="1023" height="1023" rx="228.5" fill="none" stroke="#ffffff" stroke-opacity="0.05"/>
-  <!-- closed ring -->
-  <circle cx="512" cy="512" r="270" fill="none" stroke="#e7e8ea" stroke-width="46"/>
+  <!-- ring with gap at 12 o'clock -->
+  <path d="M419.7 258.2 A270 270 0 1 0 604.3 258.2" fill="none" stroke="#e7e8ea" stroke-width="46" stroke-linecap="round"/>
   <!-- REC dot -->
   <circle cx="512" cy="512" r="150" fill="url(#f-dot)"/>
 </svg>
