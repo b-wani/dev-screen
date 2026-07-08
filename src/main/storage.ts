@@ -23,6 +23,8 @@ const MANIFEST_FILE = 'recording.json'
 const EVENTS_FILE = 'events.json'
 const RECIPE_FILE = 'recipe.json'
 const THUMBNAIL_FILE = 'thumbnail.jpg'
+/** 온보딩 완료 플래그 파일 이름. userData 폴더에 하나만 둔다. */
+const ONBOARDING_FILE = 'onboarding.json'
 
 /** 녹화 폴더가 담는 모든 것의 절대 경로 색인. 세 산출물을 하나로 묶는다. */
 export interface RecordingManifest {
@@ -158,6 +160,27 @@ async function readRecipe(folder: string): Promise<RenderRecipe | null> {
     return parseRecipe(await readFile(join(folder, RECIPE_FILE), 'utf8'))
   } catch {
     return null // 레시피 미저장 또는 손상 — 미리보기가 이벤트 트랙에서 다시 유도한다.
+  }
+}
+
+/**
+ * 온보딩 완료 플래그를 userData에 저장한다. 마지막 단계 완료 액션에서 한 번 쓴다.
+ * (녹화 폴더와 무관하므로 userData 경로를 인자로 받는다 — 테스트는 임시 폴더를 넘긴다.)
+ */
+export async function saveOnboardingComplete(userDataDir: string): Promise<void> {
+  await writeFile(join(userDataDir, ONBOARDING_FILE), JSON.stringify({ completed: true }), 'utf8')
+}
+
+/**
+ * 온보딩 완료 여부를 읽는다. 파일이 없거나 손상되면 미완료로 본다 — 도중 종료 시
+ * 플래그가 없어 다음 실행에서 온보딩이 다시 뜬다.
+ */
+export async function isOnboardingComplete(userDataDir: string): Promise<boolean> {
+  try {
+    const raw = JSON.parse(await readFile(join(userDataDir, ONBOARDING_FILE), 'utf8'))
+    return raw?.completed === true
+  } catch {
+    return false
   }
 }
 

@@ -26,7 +26,11 @@ export const IpcChannel = {
   /** 저장된 파일 경로를 클립보드에 복사한다. */
   ExportCopyPath: 'export:copy-path',
   /** 편집기 진입/이탈에 맞춰 창 크기를 조절한다(편집기는 넓게, 그 외엔 원래 크기). */
-  SetEditorMode: 'window:editor-mode'
+  SetEditorMode: 'window:editor-mode',
+  /** 온보딩 완료 여부를 조회한다(앱 시작 시 렌더러가 온보딩/기존 화면을 분기). */
+  OnboardingStatus: 'onboarding:status',
+  /** 온보딩 완료를 로컬(userData)에 저장한다(마지막 단계 완료 액션). */
+  OnboardingComplete: 'onboarding:complete'
 } as const
 
 /** 최근 녹화 목록의 한 항목 — 다시 열기 UI가 그린다. */

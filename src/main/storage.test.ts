@@ -7,6 +7,8 @@ import {
   saveRecipe,
   listRecordings,
   loadRecording,
+  saveOnboardingComplete,
+  isOnboardingComplete,
   MANIFEST_VERSION,
   type RecordingManifest
 } from './storage'
@@ -121,5 +123,21 @@ describe('녹화 로컬 영속화: 목록·다시 열기', () => {
     const folder = await makeRecording('a', 1000)
     const loaded = await loadRecording(folder)
     expect(loaded.recipe).toBeNull()
+  })
+})
+
+describe('온보딩 완료 플래그: userData 저장·로드', () => {
+  it('저장 전에는 미완료다 (플래그 파일 없음 → 온보딩 재표시)', async () => {
+    expect(await isOnboardingComplete(base)).toBe(false)
+  })
+
+  it('완료를 저장하면 이후 조회에서 완료로 읽힌다', async () => {
+    await saveOnboardingComplete(base)
+    expect(await isOnboardingComplete(base)).toBe(true)
+  })
+
+  it('플래그 파일이 손상되면 미완료로 본다', async () => {
+    await writeFile(join(base, 'onboarding.json'), 'not json', 'utf8')
+    expect(await isOnboardingComplete(base)).toBe(false)
   })
 })
