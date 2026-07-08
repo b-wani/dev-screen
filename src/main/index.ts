@@ -18,7 +18,14 @@ import { writeFile } from 'node:fs/promises'
 import { is } from '@electron-toolkit/utils'
 import { Recorder } from './recorder'
 import { AppTray } from './tray'
-import { listRecordings, loadRecording, saveRecipe, saveThumbnail } from './storage'
+import {
+  listRecordings,
+  loadRecording,
+  saveRecipe,
+  saveThumbnail,
+  isOnboardingComplete,
+  saveOnboardingComplete
+} from './storage'
 import {
   IpcChannel,
   type CaptureTarget,
@@ -360,6 +367,12 @@ function registerIpc(): void {
     const size = on ? EDITOR_WINDOW_SIZE : DEFAULT_WINDOW_SIZE
     mainWindow.setSize(size.width, size.height, true)
   })
+
+  // 온보딩 완료 여부 조회·저장 (userData에 플래그). 렌더러 최상단 화면 분기가 쓴다.
+  ipcMain.handle(IpcChannel.OnboardingStatus, () => isOnboardingComplete(app.getPath('userData')))
+  ipcMain.handle(IpcChannel.OnboardingComplete, () =>
+    saveOnboardingComplete(app.getPath('userData'))
+  )
 }
 
 // dev 모드에서도 메뉴바·Dock·창 타이틀이 제품명으로 뜨도록 앱 이름을 고정한다

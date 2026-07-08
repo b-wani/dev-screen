@@ -47,7 +47,11 @@ const api = {
     ipcRenderer.invoke(IpcChannel.ExportCopyPath, path),
   /** 편집기 진입(on=true) 시 창을 넓히고, 이탈(on=false) 시 원래 크기로 되돌린다. */
   setEditorMode: (on: boolean): Promise<void> =>
-    ipcRenderer.invoke(IpcChannel.SetEditorMode, on)
+    ipcRenderer.invoke(IpcChannel.SetEditorMode, on),
+  /** 온보딩 완료 여부를 조회한다. 앱 시작 시 온보딩/기존 화면 분기에 쓴다. */
+  onboardingStatus: (): Promise<boolean> => ipcRenderer.invoke(IpcChannel.OnboardingStatus),
+  /** 온보딩 완료를 로컬에 저장한다. 마지막 단계 완료 액션에서 호출한다. */
+  completeOnboarding: (): Promise<void> => ipcRenderer.invoke(IpcChannel.OnboardingComplete)
 }
 
 contextBridge.exposeInMainWorld('recap', api)
