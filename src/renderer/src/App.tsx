@@ -110,21 +110,26 @@ function IdleView(): JSX.Element {
     )
   }
 
+  const displays = targets.filter((t) => t.kind === 'display')
+  const windows = targets.filter((t) => t.kind === 'window')
+
   return (
     <section className="panel">
       <p className="hint">녹화할 대상을 고르세요 (전체 화면 또는 특정 창).</p>
-      <select
-        className="target-select"
-        value={selectedId}
-        onChange={(e) => setSelectedId(e.target.value)}
-      >
-        {targets.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.kind === 'display' ? '🖥 ' : '🪟 '}
-            {t.title} ({Math.round(t.width)}×{Math.round(t.height)})
-          </option>
-        ))}
-      </select>
+      <div className="picker">
+        <TargetGroup
+          title="화면"
+          targets={displays}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+        <TargetGroup
+          title="창"
+          targets={windows}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+      </div>
       <button
         className="btn btn-record"
         disabled={selectedId === ''}
@@ -153,6 +158,48 @@ function IdleView(): JSX.Element {
   )
 }
 
+/** 캡처 대상 그룹(화면/창) — 클릭 선택 카드 리스트. 대상이 없으면 그리지 않는다. */
+function TargetGroup({
+  title,
+  targets,
+  selectedId,
+  onSelect
+}: {
+  title: string
+  targets: CaptureTarget[]
+  selectedId: string
+  onSelect: (id: string) => void
+}): JSX.Element | null {
+  if (targets.length === 0) return null
+  return (
+    <div className="picker-group">
+      <h2 className="picker-group-title">{title}</h2>
+      <ul className="picker-list">
+        {targets.map((t) => (
+          <li key={t.id}>
+            <button
+              type="button"
+              className={`target-card${t.id === selectedId ? ' is-selected' : ''}`}
+              aria-pressed={t.id === selectedId}
+              onClick={() => onSelect(t.id)}
+            >
+              <span className="target-card-icon" aria-hidden>
+                {t.kind === 'display' ? '🖥' : '🪟'}
+              </span>
+              <span className="target-card-body">
+                <span className="target-card-title">{t.title}</span>
+                <span className="target-card-dim">
+                  {Math.round(t.width)}×{Math.round(t.height)}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 function RecordingView({
   state
 }: {
@@ -165,16 +212,16 @@ function RecordingView({
   }, [])
 
   return (
-    <section className="panel">
+    <section className="panel recording">
       <div className="rec-indicator">
         <span className="rec-dot" aria-hidden />
         <span className="rec-label">녹화 중</span>
-        <span className="rec-time">{formatElapsed(now - state.startedAt)}</span>
       </div>
+      <span className="rec-time">{formatElapsed(now - state.startedAt)}</span>
       <p className="hint">
-        {state.target.kind === 'display' ? '전체 화면' : '창'}: {state.target.title}
+        {state.target.kind === 'display' ? '전체 화면' : '창'}: {state.target.title} · 마우스 이벤트{' '}
+        {state.eventCount}개 기록됨
       </p>
-      <p className="hint">마우스 이벤트 {state.eventCount}개 기록됨</p>
       <button className="btn btn-stop" onClick={() => window.recap.stop()}>
         ■ 정지
       </button>
@@ -195,6 +242,7 @@ function PreviewView({
   const [recipe, setRecipe] = useState<RenderRecipe | null>(null)
   const [selected, setSelected] = useState<number | null>(null)
   const [exportStatus, setExportStatus] = useState<ExportStatus>({ phase: 'idle' })
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   // RAF 루프·익스포트는 최신 레시피를 ref로 읽는다 — 편집(타임라인·배경/배지)이 다음 프레임에 즉시 반영된다.
   // 편집 상태는 그대로 녹화 폴더에 저장해 다시 열었을 때 복원되게 한다(이슈 #9 영속화).
@@ -272,8 +320,11 @@ function PreviewView({
     }
   }
 
+  // 트림 반영 길이 (메타 바·사이드바에서 공유).
+  const lengthMs = recipe ? trimmedDurationMs(recipe) : state.durationMs
+
   return (
-    <section className="panel preview">
+    <section className="editor">
       <video
         ref={videoRef}
         src={state.videoUrl}
@@ -284,144 +335,184 @@ function PreviewView({
         playsInline
         style={{ display: 'none' }}
       />
-      <canvas ref={canvasRef} className="preview-canvas" />
-      {recipe && (
-        <Timeline
-          recipe={recipe}
-          selected={selected}
-          onSelect={setSelected}
-          onChange={setRecipe}
-        />
-      )}
-      {recipe && selected !== null && recipe.zoomSegments[selected] && (
-        <fieldset className="controls">
-          <legend>줌 구간 #{selected + 1} 배율</legend>
-          <div className="scale-buttons">
-            {ZOOM_DEFAULTS.scales.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`btn btn-scale${recipe.zoomSegments[selected].scale === s ? ' is-active' : ''}`}
-                onClick={() => setRecipe((r) => (r ? setZoomSegmentScale(r, selected, s) : r))}
-              >
-                {s.toFixed(1)}x
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      )}
-      {recipe && (
-        <fieldset className="controls">
-          <legend>배경 / 배지</legend>
-          <label className="control">
-            <span>배경색</span>
-            <input
-              type="color"
-              value={recipe.background.color}
-              onChange={(e) =>
-                setRecipe((r) =>
-                  r ? { ...r, background: { ...r.background, color: e.target.value } } : r
-                )
-              }
-            />
-          </label>
-          <label className="control">
-            <span>패딩 {Math.round(recipe.background.padding * 100)}%</span>
-            <input
-              type="range"
-              min={0}
-              max={0.4}
-              step={0.01}
-              value={recipe.background.padding}
-              onChange={(e) =>
-                setRecipe((r) =>
-                  r ? { ...r, background: { ...r.background, padding: Number(e.target.value) } } : r
-                )
-              }
-            />
-          </label>
-          <label className="control control-check">
-            <input
-              type="checkbox"
-              checked={recipe.badge.visible}
-              onChange={(e) =>
-                setRecipe((r) =>
-                  r ? { ...r, badge: { ...r.badge, visible: e.target.checked } } : r
-                )
-              }
-            />
-            <span>뷰포트 크기 배지</span>
-          </label>
-          <label className="control">
-            <span>맥락 (브랜치/커밋)</span>
-            <input
-              type="text"
-              className="control-text"
-              placeholder="예: feat/v2-overlay @ 61e6fd6"
-              value={recipe.badge.contextLabel}
-              onChange={(e) =>
-                setRecipe((r) =>
-                  r ? { ...r, badge: { ...r.badge, contextLabel: e.target.value } } : r
-                )
-              }
-            />
-          </label>
-          <label className="control control-check">
-            <input
-              type="checkbox"
-              checked={recipe.keystrokes.overlayVisible}
-              onChange={(e) =>
-                setRecipe((r) =>
-                  r
-                    ? { ...r, keystrokes: { ...r.keystrokes, overlayVisible: e.target.checked } }
-                    : r
-                )
-              }
-            />
-            <span>키 입력 오버레이</span>
-          </label>
-        </fieldset>
-      )}
-      <dl className="meta">
-        <div>
-          <dt>대상</dt>
-          <dd>
-            {state.target.kind === 'display' ? '전체 화면' : '창'} — {state.target.title} (
-            {Math.round(state.target.width)}×{Math.round(state.target.height)})
-          </dd>
-        </div>
-        <div>
-          <dt>길이</dt>
-          <dd>
-            {recipe ? formatElapsed(trimmedDurationMs(recipe)) : formatElapsed(state.durationMs)}
-            {recipe && trimmedDurationMs(recipe) !== state.durationMs && (
-              <span className="meta-sub"> (원본 {formatElapsed(state.durationMs)})</span>
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>자동 줌</dt>
-          <dd>{recipe?.zoomSegments.length ?? 0}개 구간 (클릭에서 자동 생성)</dd>
-        </div>
-        <div>
-          <dt>이벤트 트랙</dt>
-          <dd>{state.eventCount}개 이벤트 (events.json 분리 저장)</dd>
-        </div>
-        <div>
-          <dt>폴더</dt>
-          <dd className="path">{state.folder}</dd>
-        </div>
-      </dl>
-      <ExportPanel status={exportStatus} onExport={handleExport} />
-      <div className="preview-actions">
-        <button className="btn" onClick={onExit}>
+
+      {/* 캔버스 위 얇은 메타 바 — 대상·길이 + 목록/재녹화 액션 */}
+      <header className="editor-bar">
+        <button className="btn btn-ghost btn-sm" onClick={onExit}>
           ← 목록
         </button>
-        <button
-          className="btn btn-record"
-          onClick={() => window.recap.start(state.target.id)}
-        >
+        <div className="editor-bar-meta">
+          <span>
+            {state.target.kind === 'display' ? '전체 화면' : '창'} — {state.target.title} (
+            {Math.round(state.target.width)}×{Math.round(state.target.height)})
+          </span>
+          <span className="dot-sep" aria-hidden>
+            ·
+          </span>
+          <span className="len">{formatElapsed(lengthMs)}</span>
+          {recipe && lengthMs !== state.durationMs && (
+            <span className="meta-sub">(원본 {formatElapsed(state.durationMs)})</span>
+          )}
+        </div>
+        <button className="btn btn-record btn-sm" onClick={() => window.recap.start(state.target.id)}>
           ● 같은 대상 다시 녹화
+        </button>
+      </header>
+
+      <div className="editor-body">
+        <div className="editor-main">
+          <div className="canvas-wrap">
+            <canvas ref={canvasRef} className="preview-canvas" />
+          </div>
+          {recipe && (
+            <Timeline
+              recipe={recipe}
+              selected={selected}
+              onSelect={setSelected}
+              onChange={setRecipe}
+            />
+          )}
+        </div>
+
+        {sidebarOpen && recipe && (
+          <aside className="editor-sidebar">
+            {/* ① 줌 구간 — 선택된 구간이 있을 때만 배율 버튼 */}
+            <fieldset className="side-section">
+              <legend className="side-section-title">줌 구간</legend>
+              {selected !== null && recipe.zoomSegments[selected] ? (
+                <>
+                  <p className="side-hint">구간 #{selected + 1} 배율</p>
+                  <div className="scale-buttons">
+                    {ZOOM_DEFAULTS.scales.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`btn btn-scale${recipe.zoomSegments[selected].scale === s ? ' is-active' : ''}`}
+                        onClick={() => setRecipe((r) => (r ? setZoomSegmentScale(r, selected, s) : r))}
+                      >
+                        {s.toFixed(1)}x
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="side-hint">타임라인에서 줌 구간을 선택하면 배율을 조절할 수 있습니다.</p>
+              )}
+            </fieldset>
+
+            {/* ② 배경 / 패딩 */}
+            <fieldset className="side-section">
+              <legend className="side-section-title">배경 / 패딩</legend>
+              <label className="control control-row">
+                <span>배경색</span>
+                <input
+                  type="color"
+                  value={recipe.background.color}
+                  onChange={(e) =>
+                    setRecipe((r) =>
+                      r ? { ...r, background: { ...r.background, color: e.target.value } } : r
+                    )
+                  }
+                />
+              </label>
+              <label className="control">
+                <span className="control-row">
+                  <span>패딩</span>
+                  <span className="control-value">{Math.round(recipe.background.padding * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={0.4}
+                  step={0.01}
+                  value={recipe.background.padding}
+                  onChange={(e) =>
+                    setRecipe((r) =>
+                      r
+                        ? { ...r, background: { ...r.background, padding: Number(e.target.value) } }
+                        : r
+                    )
+                  }
+                />
+              </label>
+            </fieldset>
+
+            {/* ③ 배지 · 키 입력 오버레이 */}
+            <fieldset className="side-section">
+              <legend className="side-section-title">배지 · 키 입력</legend>
+              <label className="control control-check">
+                <input
+                  type="checkbox"
+                  checked={recipe.badge.visible}
+                  onChange={(e) =>
+                    setRecipe((r) =>
+                      r ? { ...r, badge: { ...r.badge, visible: e.target.checked } } : r
+                    )
+                  }
+                />
+                <span>뷰포트 크기 배지</span>
+              </label>
+              <label className="control">
+                <span>맥락 (브랜치/커밋)</span>
+                <input
+                  type="text"
+                  className="control-text"
+                  placeholder="예: feat/v2-overlay @ 61e6fd6"
+                  value={recipe.badge.contextLabel}
+                  onChange={(e) =>
+                    setRecipe((r) =>
+                      r ? { ...r, badge: { ...r.badge, contextLabel: e.target.value } } : r
+                    )
+                  }
+                />
+              </label>
+              <label className="control control-check">
+                <input
+                  type="checkbox"
+                  checked={recipe.keystrokes.overlayVisible}
+                  onChange={(e) =>
+                    setRecipe((r) =>
+                      r
+                        ? { ...r, keystrokes: { ...r.keystrokes, overlayVisible: e.target.checked } }
+                        : r
+                    )
+                  }
+                />
+                <span>키 입력 오버레이</span>
+              </label>
+            </fieldset>
+
+            {/* ④ 익스포트 */}
+            <fieldset className="side-section">
+              <legend className="side-section-title">익스포트</legend>
+              <ExportPanel status={exportStatus} onExport={handleExport} />
+            </fieldset>
+
+            {/* 메타 정보 (사이드바 하단) */}
+            <dl className="meta">
+              <div>
+                <dt>자동 줌</dt>
+                <dd>{recipe.zoomSegments.length}개 구간 (클릭에서 자동 생성)</dd>
+              </div>
+              <div>
+                <dt>이벤트 트랙</dt>
+                <dd>{state.eventCount}개 이벤트 (events.json 분리 저장)</dd>
+              </div>
+              <div>
+                <dt>폴더</dt>
+                <dd className="path">{state.folder}</dd>
+              </div>
+            </dl>
+          </aside>
+        )}
+
+        <button
+          className="sidebar-toggle"
+          onClick={() => setSidebarOpen((v) => !v)}
+          title={sidebarOpen ? '사이드바 접기' : '사이드바 펼치기'}
+          aria-label={sidebarOpen ? '사이드바 접기' : '사이드바 펼치기'}
+        >
+          {sidebarOpen ? '›' : '‹'}
         </button>
       </div>
     </section>
@@ -445,26 +536,33 @@ function ExportPanel({
     const pct =
       status.totalFrames > 0 ? Math.round((status.renderedFrames / status.totalFrames) * 100) : 0
     return (
-      <p className="hint">
-        {status.format.toUpperCase()} 익스포트 중… {pct}%
-      </p>
+      <div className="export-progress">
+        <div className="export-progress-head">
+          <span>{status.format.toUpperCase()} 익스포트 중…</span>
+          <span>{pct}%</span>
+        </div>
+        <div className="progress-bar">
+          <div className="progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
     )
   }
 
   if (status.phase === 'done') {
     return (
       <div className="export-done">
-        <p className="hint">
-          {status.format.toUpperCase()} 저장 완료 · {formatMB(status.sizeBytes)}
-          {status.exceedsLimit && (
-            <span className="export-warn"> ⚠ {limitLabel(status.format)}을 초과했습니다</span>
-          )}
-        </p>
+        <div className="export-done-head">
+          <span>{status.format.toUpperCase()} 저장 완료</span>
+          <span className="export-done-size">{formatMB(status.sizeBytes)}</span>
+        </div>
+        {status.exceedsLimit && (
+          <p className="export-warn">⚠ {limitLabel(status.format)}을 초과했습니다</p>
+        )}
         <div className="export-actions">
-          <button className="btn" onClick={() => window.recap.revealExport(status.path)}>
+          <button className="btn btn-sm" onClick={() => window.recap.revealExport(status.path)}>
             Finder에서 열기
           </button>
-          <button className="btn" onClick={() => window.recap.copyExportPath(status.path)}>
+          <button className="btn btn-sm" onClick={() => window.recap.copyExportPath(status.path)}>
             경로 복사
           </button>
         </div>
@@ -475,12 +573,12 @@ function ExportPanel({
   return (
     <div className="export-done">
       {status.phase === 'error' && <p className="export-warn">익스포트 실패: {status.message}</p>}
-      <div className="export-actions">
+      <div className="export-buttons">
         <button className="btn btn-export" onClick={() => onExport('mp4')}>
-          MP4 익스포트
+          MP4
         </button>
         <button className="btn btn-export" onClick={() => onExport('gif')}>
-          GIF 익스포트
+          GIF
         </button>
       </div>
     </div>

@@ -89,8 +89,10 @@ async function ensureScreenAccess(): Promise<boolean> {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 900,
-    height: 680,
+    width: 1180,
+    height: 760,
+    minWidth: 720,
+    minHeight: 560,
     show: false,
     title: 'Recap',
     icon: brandIconPath(),
