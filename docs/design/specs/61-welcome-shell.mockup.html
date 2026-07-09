@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>#61 Welcome 셸 재설계 — 목업</title>
+<style>
+  :root{
+    --bg:#0c140a; --surface:#131d10; --surface-2:#1a2716; --surface-3:#22331d;
+    --border:rgba(180,230,160,0.10); --border-strong:rgba(180,230,160,0.18);
+    --text-1:#f2f6ee; --text-2:#a7bd9c; --text-3:#6f8465;
+    --grass:#4cc93f; --grass-hover:#5cd94e; --grass-ink:#0a1f0c; --warn:#ffc233;
+    --r-s:8px; --r-m:12px; --r-l:16px; --pill:999px;
+    --font-ui:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',sans-serif;
+    --font-display:'SF Pro Rounded',-apple-system,BlinkMacSystemFont,sans-serif;
+    --font-mono:'SF Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05080a;font-family:var(--font-ui);color:var(--text-1);
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px;gap:28px;flex-wrap:wrap}
+
+  /* ---- Welcome 창 ---- */
+  .win{width:820px;height:580px;background:var(--bg);border-radius:var(--r-l);
+    overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6);border:1px solid var(--border);
+    display:flex;flex-direction:column}
+  .titlebar{height:38px;display:flex;align-items:center;padding:0 14px;
+    background:var(--surface);border-bottom:1px solid var(--border);position:relative;flex:0 0 auto}
+  .lights{display:flex;gap:8px}
+  .lights i{width:12px;height:12px;border-radius:var(--pill);display:block}
+  .lights .c{background:#ff5f57}.lights .m{background:#febc2e}.lights .g{background:#28c840}
+  .titlebar .t{position:absolute;left:0;right:0;text-align:center;font-size:13px;
+    color:var(--text-2);font-family:var(--font-display);font-weight:600}
+
+  .body{flex:1;display:flex;min-height:0}
+
+  /* ---- 좌 레일: 마스코트 히어로 + 챕터 내비 ---- */
+  .rail{width:272px;flex:0 0 272px;background:var(--surface);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:22px 18px}
+  .hero{text-align:center;padding:6px 6px 18px}
+  .hero .mascot{width:104px;height:104px;margin:0 auto 12px;display:block}
+  .hero h1{font-family:var(--font-display);font-size:20px;font-weight:700;letter-spacing:-.2px}
+  .hero p{font-size:12.5px;color:var(--text-2);margin-top:6px;line-height:1.45}
+  .progress{margin:14px auto 4px;font-family:var(--font-mono);font-size:11px;color:var(--text-3);
+    letter-spacing:.4px;font-variant-numeric:tabular-nums}
+
+  .chapters{list-style:none;margin-top:14px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+  .chapters li{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:var(--r-m);
+    font-size:13px;color:var(--text-2);cursor:default;position:relative}
+  .chapters li .num{width:20px;height:20px;flex:0 0 20px;border-radius:var(--pill);
+    display:grid;place-items:center;font-family:var(--font-mono);font-size:10.5px;
+    background:var(--surface-3);color:var(--text-3);font-variant-numeric:tabular-nums}
+  .chapters li.done{color:var(--text-2)}
+  .chapters li.done .num{background:transparent;color:var(--grass);border:1px solid var(--border-strong)}
+  .chapters li.done .num::after{content:"✓"}
+  .chapters li.done .num span{display:none}
+  .chapters li.active{background:var(--surface-3);color:var(--text-1);font-weight:600}
+  .chapters li.active .num{background:var(--grass);color:var(--grass-ink)}
+  .chapters li.active::before{content:"";position:absolute;left:-18px;top:8px;bottom:8px;width:3px;
+    background:var(--grass);border-radius:var(--pill)}
+
+  /* ---- 우 본문 패널 ---- */
+  .panel{flex:1;display:flex;flex-direction:column;min-width:0}
+  .content{flex:1;padding:38px 40px 20px;overflow:auto}
+  .kicker{font-family:var(--font-mono);font-size:11px;color:var(--grass);letter-spacing:.6px;
+    text-transform:uppercase;margin-bottom:10px}
+  .content h2{font-family:var(--font-display);font-size:24px;font-weight:700;letter-spacing:-.3px}
+  .lead{font-size:14.5px;line-height:1.65;color:var(--text-1);margin-top:16px;max-width:46ch}
+  .lead .muted{color:var(--text-2)}
+  kbd{font-family:var(--font-mono);font-size:12.5px;background:var(--surface-2);
+    border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:var(--r-s);
+    padding:3px 8px;color:var(--text-1);margin:0 2px;white-space:nowrap;
+    font-variant-numeric:tabular-nums}
+  .note{margin-top:22px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:var(--r-m);font-size:13px;line-height:1.55;color:var(--text-2)}
+  .note b{color:var(--text-1);font-weight:600}
+  .change-tag{display:inline-block;margin-left:8px;font-family:var(--font-mono);font-size:10px;
+    color:var(--warn);border:1px solid var(--warn);border-radius:var(--pill);padding:1px 7px;
+    vertical-align:middle;letter-spacing:.3px}
+
+  /* ---- 하단 내비 바 ---- */
+  .footer{flex:0 0 auto;border-top:1px solid var(--border);padding:16px 40px;
+    display:flex;align-items:center;justify-content:space-between;background:var(--surface)}
+  .dots{display:flex;gap:6px}
+  .dots i{width:6px;height:6px;border-radius:var(--pill);background:var(--surface-3);display:block}
+  .dots i.on{background:var(--grass);width:18px}
+  .btns{display:flex;gap:10px}
+  .btn{font-family:var(--font-ui);font-size:13.5px;border:none;border-radius:var(--pill);
+    padding:9px 20px;cursor:default}
+  .btn-ghost{background:transparent;color:var(--text-2);border:1px solid var(--border-strong)}
+  .btn-primary{background:var(--grass);color:var(--grass-ink);font-weight:600}
+
+  /* ---- 주석 카드 (목업 설명) ---- */
+  .legend{width:300px;max-width:100%;font-size:12.5px;line-height:1.6;color:var(--text-2)}
+  .legend h3{font-family:var(--font-display);color:var(--text-1);font-size:15px;margin-bottom:10px}
+  .legend p{margin-bottom:10px}
+  .legend code{font-family:var(--font-mono);font-size:11px;color:var(--grass)}
+  .legend .warn{color:var(--warn)}
+</style>
+</head>
+<body>
+
+  <div class="win" role="dialog" aria-label="Recap 시작하기">
+    <div class="titlebar">
+      <div class="lights"><i class="c"></i><i class="m"></i><i class="g"></i></div>
+      <div class="t">Recap 시작하기</div>
+    </div>
+
+    <div class="body">
+      <!-- 좌: 마스코트 히어로 + 챕터 내비 -->
+      <aside class="rail">
+        <div class="hero">
+          <!-- Hoppy — Welcome 히어로(prime mascot surface) -->
+          <svg class="mascot" viewBox="0 0 120 120" aria-label="Hoppy 마스코트">
+            <ellipse cx="60" cy="104" rx="34" ry="7" fill="#000" opacity="0.28"/>
+            <!-- body -->
+            <path d="M60 30c26 0 40 20 40 44 0 20-16 30-40 30S20 94 20 74c0-24 14-44 40-44z" fill="#4cc93f"/>
+            <path d="M60 30c26 0 40 20 40 44 0 6-1.4 11-4 15-6-30-30-40-52-38 4-13 15-21 16-21z" fill="#5cd94e" opacity=".6"/>
+            <!-- belly -->
+            <ellipse cx="60" cy="82" rx="22" ry="20" fill="#0a1f0c" opacity=".14"/>
+            <!-- eyes -->
+            <circle cx="42" cy="34" r="15" fill="#4cc93f"/>
+            <circle cx="78" cy="34" r="15" fill="#4cc93f"/>
+            <circle cx="42" cy="34" r="10" fill="#f2f6ee"/>
+            <circle cx="78" cy="34" r="10" fill="#f2f6ee"/>
+            <circle cx="45" cy="36" r="5" fill="#0a1f0c"/>
+            <circle cx="75" cy="36" r="5" fill="#0a1f0c"/>
+            <circle cx="47" cy="34" r="1.6" fill="#fff"/>
+            <circle cx="77" cy="34" r="1.6" fill="#fff"/>
+            <!-- smile -->
+            <path d="M46 74q14 12 28 0" stroke="#0a1f0c" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <!-- cheeks -->
+            <circle cx="36" cy="66" r="5" fill="#5cd94e" opacity=".5"/>
+            <circle cx="84" cy="66" r="5" fill="#5cd94e" opacity=".5"/>
+          </svg>
+          <h1>환영해요!</h1>
+          <p>Hoppy가 Recap 사용법을<br/>한 번에 안내할게요.</p>
+          <div class="progress">STEP 06 / 07</div>
+        </div>
+
+        <ol class="chapters">
+          <li class="done"><span class="num"><span>1</span></span> 화면 녹화·손쉬운 사용 권한</li>
+          <li class="done"><span class="num"><span>2</span></span> Recap이 하는 일</li>
+          <li class="done"><span class="num"><span>3</span></span> 녹화와 자동 효과</li>
+          <li class="done"><span class="num"><span>4</span></span> 경량 편집</li>
+          <li class="done"><span class="num"><span>5</span></span> 익스포트</li>
+          <li class="active"><span class="num">6</span> 전역 단축키 ⌥⌘R</li>
+          <li><span class="num">7</span> 자주 묻는 질문</li>
+        </ol>
+      </aside>
+
+      <!-- 우: 현재 단계 본문(= 기존 shortcuts 콘텐츠, 카피만 새 모델로 갱신) -->
+      <section class="panel">
+        <div class="content">
+          <div class="kicker">단축키</div>
+          <h2>전역 단축키 <kbd>⌥⌘R</kbd><span class="change-tag">카피 갱신</span></h2>
+          <p class="lead">
+            <kbd>⌥⌘R</kbd> 을 누르면 어디서든 <b>캡처 툴바를 불러와요.</b>
+            녹화 중에 누르면 <span class="muted">바로 정지합니다.</span>
+            어떤 앱을 쓰고 있든 동작해요.
+          </p>
+          <div class="note">
+            Recap은 <b>메뉴바에 상주</b>해요. 창을 닫아도 종료되지 않고,
+            메뉴바 아이콘 → <b>Welcome 다시 보기</b>로 이 안내를 언제든 다시 열 수 있어요.
+          </div>
+        </div>
+
+        <div class="footer">
+          <div class="dots">
+            <i></i><i></i><i></i><i></i><i></i><i class="on"></i><i></i>
+          </div>
+          <div class="btns">
+            <button class="btn btn-ghost">이전</button>
+            <button class="btn btn-primary">다음</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- 목업 설명 (산출물 아님, 리뷰 참고용) -->
+  <aside class="legend">
+    <h3>이 목업이 보여주는 것</h3>
+    <p><b>셸만 재설계.</b> 좌 레일(마스코트 히어로 + 챕터 내비)과 하단 바가 신규 셸.
+    우측 본문은 기존 <code>OnboardingStepBody</code> 콘텐츠를 그대로 마운트한 모습.</p>
+    <p><b>챕터 내비 = 사이드바</b>(권장안). 7단계가 항상 보이고 현재 단계 강조, 완료는 <span style="color:var(--grass)">✓</span>.
+    라벨은 <code>ONBOARDING_STEPS[].title</code> 그대로.</p>
+    <p class="warn"><b>카피 갱신:</b> ⌥⌘R = "녹화 시작/정지" → "<b>캡처 툴바 소환</b>(녹화 중이면 정지)"로 수정.
+    "Welcome 다시 보기" 재소환 경로 안내 추가.</p>
+    <p>모든 색·radius·폰트는 Hoppy C-dark 토큰. 키/번호는 <code>SF Mono</code>, 헤딩은 <code>SF Pro Rounded</code>.
+    마스코트는 히어로에만 — 권한 단계 본문 등 기능 크롬에는 넣지 않음.</p>
+  </aside>
+
+</body>
+</html>
