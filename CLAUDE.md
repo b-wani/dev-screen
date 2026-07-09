@@ -11,3 +11,7 @@
 ### Domain docs
 
 단일 컨텍스트 — 루트 `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+
+<!-- BEGIN @agent-native/skills -->
+When operating as Claude Fable, use the /efficient-fable skill always.
+<!-- END @agent-native/skills -->

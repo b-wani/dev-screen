@@ -6,7 +6,7 @@
   "skillName": "visual-recap",
   "contentHash": "e45761de339a6df2",
   "mcpUrl": "https://plan.agent-native.com/_agent-native/mcp",
-  "installedAt": "2026-07-06T06:11:13.330Z",
+  "installedAt": "2026-07-09T08:26:08.290Z",
   "installCommand": "npx @agent-native/core@latest skills add visual-recap",
   "updateCommand": "npx @agent-native/core@latest skills update visual-recap",
   "planMode": "hosted"
