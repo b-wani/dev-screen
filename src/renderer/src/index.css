@@ -1719,6 +1719,23 @@ body {
   font-weight: 700;
 }
 
+.library-header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.library-search {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  color: var(--text-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: var(--space-2) var(--space-3);
+  width: 200px;
+}
+
 .library-sort {
   font-family: var(--font-ui);
   font-size: var(--text-sm);
@@ -1740,6 +1757,7 @@ body {
 }
 
 .library-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -1754,6 +1772,69 @@ body {
 
 .library-card:hover {
   background: var(--surface-3);
+}
+
+.library-card-menu-btn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: rgba(12, 20, 10, 0.6);
+  color: var(--text-1);
+  font-size: var(--text-base);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.library-card:hover .library-card-menu-btn,
+.library-card-menu-btn:focus-visible {
+  opacity: 1;
+}
+
+.library-card-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.library-card-menu {
+  position: absolute;
+  top: calc(var(--space-2) + 28px);
+  right: var(--space-2);
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: var(--space-1);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.library-card-menu-item {
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: transparent;
+  color: var(--text-1);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-align: left;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+}
+
+.library-card-menu-item:hover {
+  background: var(--surface-2);
+}
+
+.library-card-menu-item.is-destructive {
+  color: var(--rec);
 }
 
 .library-card-thumb {
@@ -1799,9 +1880,23 @@ body {
   padding: 0 var(--space-2) var(--space-2);
 }
 
-.library-card-date {
+.library-card-title-text {
   font-size: var(--text-base);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-card-title-input {
+  font-family: var(--font-ui);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  padding: 2px var(--space-2);
 }
 
 .library-card-meta {

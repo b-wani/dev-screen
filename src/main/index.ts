@@ -28,6 +28,8 @@ import {
   loadRecording,
   saveRecipe,
   saveThumbnail,
+  renameRecording,
+  trashRecording,
   isOnboardingComplete,
   saveOnboardingComplete
 } from './storage'
@@ -934,6 +936,27 @@ async function confirmAreaSelection(localRect: Rect): Promise<void> {
   else applyState({ status: 'error', code: 'no-display', message: PERMISSION_MESSAGE })
 }
 
+/**
+ * 삭제 확인 다이얼로그를 띄우고, 확인 시에만 녹화 폴더를 휴지통으로 옮긴다(#79).
+ * 파괴적 액션이라 취소가 기본(cancelId) — 라이브러리 창을 부모로 붙여 모달로 띄운다.
+ */
+async function confirmTrashRecording(win: BrowserWindow | null, folder: string): Promise<boolean> {
+  const options = {
+    type: 'warning' as const,
+    buttons: ['취소', '삭제'],
+    defaultId: 0,
+    cancelId: 0,
+    message: '이 녹화를 삭제할까요?',
+    detail: '휴지통으로 이동합니다. 휴지통에서 복구할 수 있어요.'
+  }
+  const { response } = win
+    ? await dialog.showMessageBox(win, options)
+    : await dialog.showMessageBox(options)
+  if (response !== 1) return false
+  await trashRecording(folder, shell.trashItem)
+  return true
+}
+
 function registerIpc(): void {
   ipcMain.handle(IpcChannel.ListTargets, async () => {
     if (!(await ensureScreenAccess())) throw new Error(PERMISSION_MESSAGE)
@@ -990,6 +1013,17 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannel.ExportCopyPath, (_e, path: string) => {
     clipboard.writeText(path)
+  })
+
+  // 라이브러리 항목 관리(#79): 이름변경 · 삭제(확인 후 휴지통) · 파일 위치 열기.
+  ipcMain.handle(IpcChannel.RenameRecording, (_e, folder: string, title: string) =>
+    renameRecording(folder, title)
+  )
+  ipcMain.handle(IpcChannel.TrashRecording, (e, folder: string) =>
+    confirmTrashRecording(BrowserWindow.fromWebContents(e.sender), folder)
+  )
+  ipcMain.handle(IpcChannel.RevealRecording, (_e, folder: string) => {
+    shell.showItemInFolder(folder)
   })
 
   // 지정 role 의 창을 연다. 싱글톤 role(shell·library·welcome)은 이미 열려 있으면

@@ -7,6 +7,8 @@ import {
   saveRecipe,
   listRecordings,
   loadRecording,
+  renameRecording,
+  trashRecording,
   saveOnboardingComplete,
   isOnboardingComplete,
   MANIFEST_VERSION,
@@ -123,6 +125,41 @@ describe('녹화 로컬 영속화: 목록·다시 열기', () => {
     const folder = await makeRecording('a', 1000)
     const loaded = await loadRecording(folder)
     expect(loaded.recipe).toBeNull()
+  })
+
+  it('title 없는(마이그레이션 전) 녹화는 폴더 이름이 title로 폴백한다', async () => {
+    await makeRecording('a', 1000)
+    const list = await listRecordings(base)
+    expect(list[0].title).toBe('a')
+  })
+
+  it('manifest에 title이 있으면 그 값을 title로 노출한다', async () => {
+    const folder = await makeRecording('a', 1000)
+    await renameRecording(folder, '내 첫 녹화')
+    const list = await listRecordings(base)
+    expect(list[0].title).toBe('내 첫 녹화')
+  })
+})
+
+describe('녹화 항목 관리: 이름변경·삭제(#79)', () => {
+  it('renameRecording은 title만 갱신하고 나머지 매니페스트 필드는 유지한다', async () => {
+    const folder = await makeRecording('a', 1000)
+    await renameRecording(folder, '제목')
+
+    const loaded = await loadRecording(folder)
+    expect(loaded.durationMs).toBe(manifest(1000).durationMs)
+
+    const list = await listRecordings(base)
+    expect(list[0].title).toBe('제목')
+  })
+
+  it('trashRecording은 주입받은 trashItem을 폴더 경로로 호출한다', async () => {
+    const folder = await makeRecording('a', 1000)
+    const calls: string[] = []
+    await trashRecording(folder, async (path) => {
+      calls.push(path)
+    })
+    expect(calls).toEqual([folder])
   })
 })
 

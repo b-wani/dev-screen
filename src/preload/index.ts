@@ -49,6 +49,15 @@ const api = {
   /** 저장된 파일 경로를 클립보드에 복사한다. */
   copyExportPath: (path: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannel.ExportCopyPath, path),
+  /** 녹화 제목을 바꿔 manifest에 저장한다(#79). */
+  renameRecording: (folder: string, title: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.RenameRecording, folder, title),
+  /** 확인 다이얼로그 후 녹화 폴더를 휴지통으로 옮긴다. 취소되면 false를 돌려준다. */
+  trashRecording: (folder: string): Promise<boolean> =>
+    ipcRenderer.invoke(IpcChannel.TrashRecording, folder),
+  /** 녹화 폴더를 Finder에서 연다. */
+  revealRecording: (folder: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.RevealRecording, folder),
   /** 지정 role 의 창을 연다(싱글톤이면 기존 창 focus). 새/기존 창의 windowId 를 돌려받는다. */
   openWindow: (role: WindowRole, context?: unknown): Promise<number> =>
     ipcRenderer.invoke(IpcChannel.WindowOpen, role, context),

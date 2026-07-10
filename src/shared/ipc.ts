@@ -25,6 +25,12 @@ export const IpcChannel = {
   ExportReveal: 'export:reveal',
   /** 저장된 파일 경로를 클립보드에 복사한다. */
   ExportCopyPath: 'export:copy-path',
+  /** 녹화 제목을 바꿔 manifest에 저장한다(#79 라이브러리 이름변경). */
+  RenameRecording: 'recordings:rename',
+  /** 확인 다이얼로그 후 녹화 폴더를 휴지통으로 옮긴다. 취소되면 false. */
+  TrashRecording: 'recordings:trash',
+  /** 녹화 폴더를 Finder에서 연다(파일 위치 열기). */
+  RevealRecording: 'recordings:reveal',
   /** 지정 role 의 창을 연다(이미 열린 싱글톤이면 focus). 새 창의 windowId 를 돌려준다. */
   WindowOpen: 'window:open',
   /** 창 생성 시 main 이 넣어 둔 초기 컨텍스트를 windowId 로 당겨온다(렌더러 부팅 pull). */
@@ -66,6 +72,8 @@ export interface RecordingSummary {
   startedAt: number
   durationMs: number
   eventCount: number
+  /** 표시용 제목 — manifest에 사용자 지정 title이 있으면 그 값, 없으면 `name`(폴더 이름) 폴백(#79). */
+  title: string
   /** 첫 프레임 썸네일 캐시의 미리보기 URL. 캐시가 없는 구버전 녹화면 없음. */
   thumbnailUrl?: string
 }

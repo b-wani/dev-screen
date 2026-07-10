@@ -18,6 +18,7 @@ import type { CaptureTarget, EventTrack } from '../shared/event-track'
 import type { RenderRecipe } from '../shared/recipe'
 import { serializeRecipe, parseRecipe } from '../shared/recipe.persist'
 import type { RecordingSummary } from '../shared/ipc'
+import { resolveTitle } from '../shared/library-title'
 
 const MANIFEST_FILE = 'recording.json'
 const EVENTS_FILE = 'events.json'
@@ -40,6 +41,8 @@ export interface RecordingManifest {
   eventCount: number
   /** 녹화된 캡처 대상 (전체 화면 또는 특정 창). 다시 열 때 미리보기가 복원한다. */
   target: CaptureTarget
+  /** 사용자 지정 제목(#79 라이브러리 이름변경). 없으면(마이그레이션 전 녹화) 폴더 이름 폴백. */
+  title?: string
 }
 
 const MANIFEST_VERSION = 1
@@ -108,6 +111,7 @@ export async function listRecordings(
       startedAt: manifest.startedAt,
       durationMs: manifest.durationMs,
       eventCount: manifest.eventCount,
+      title: resolveTitle(manifest.title, name),
       ...(hasThumb ? { thumbnailUrl: toThumbnailUrl!(thumbPath) } : {})
     })
   }
@@ -142,6 +146,28 @@ export async function loadRecording(folder: string): Promise<LoadedRecording> {
     target: manifest.target,
     recipe: await readRecipe(folder)
   }
+}
+
+/**
+ * 녹화의 표시 제목을 바꿔 manifest에 저장한다(#79 라이브러리 이름변경). 다른 매니페스트
+ * 필드는 그대로 유지 — title만 갱신하는 부분 쓰기.
+ */
+export async function renameRecording(folder: string, title: string): Promise<void> {
+  const manifest = await readManifest(folder)
+  if (!manifest) throw new Error(`녹화 매니페스트를 읽을 수 없습니다: ${folder}`)
+  await writeManifest(folder, { ...manifest, title })
+}
+
+/**
+ * 녹화 폴더를 통째로 휴지통으로 옮긴다(복구 가능 삭제, #79). 실제 이동은 Electron의
+ * `shell.trashItem`이 하므로, 이 함수는 그 호출을 주입받아 storage 모듈을 Electron 프리
+ * (vitest에서 테스트 가능)하게 유지한다.
+ */
+export async function trashRecording(
+  folder: string,
+  trashItem: (path: string) => Promise<void>
+): Promise<void> {
+  await trashItem(folder)
 }
 
 async function readManifest(folder: string): Promise<RecordingManifest | null> {
