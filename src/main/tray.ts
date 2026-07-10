@@ -51,10 +51,9 @@ export class AppTray {
     this.tray = new Tray(this.idleIcon)
     this.tray.setToolTip('Recap')
 
-    this.tray.on('click', () => {
-      if (this.state.status === 'recording') this.cb.onToggleRecord()
-      else this.cb.onShowLauncher()
-    })
+    // 좌클릭: 녹화 중이면 정지, 아니면 캡처 툴바 소환(#70). onToggleRecord 가 둘을 판단한다.
+    // 런처(shell) 창은 컨텍스트 메뉴 '런처 열기'로 연다.
+    this.tray.on('click', () => this.cb.onToggleRecord())
     this.tray.on('right-click', () => void this.showMenu())
   }
 

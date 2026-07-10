@@ -7,6 +7,7 @@ import { PreviewView } from './views/PreviewView'
 import { ErrorView } from './views/ErrorView'
 import { OnboardingView } from './views/OnboardingView'
 import { PlaceholderView } from './views/PlaceholderView'
+import { ToolbarView } from './views/ToolbarView'
 
 export default function App(): JSX.Element {
   // 이 창의 정체(id·role) — main 이 URL 해시로 실어 준다(#69). 없으면(구 진입 경로 등)
@@ -32,7 +33,12 @@ export default function App(): JSX.Element {
 
   const goIdle = (): void => setState({ status: 'idle' })
 
-  // shell 이 아닌 role 창은 아직 전용 화면이 없다 — 자리표시자로 골격이 닿았음을 보인다.
+  // 캡처 툴바 창(#70) — 프레임 없는 플로팅 pill 이라 .app 크롬 없이 자체 루트로 그린다.
+  if (role === 'toolbar') {
+    return <ToolbarView />
+  }
+
+  // 그 밖의 아직 전용 화면이 없는 role 창은 자리표시자로 골격이 닿았음을 보인다.
   if (role !== 'shell') {
     return (
       <main className="app">
