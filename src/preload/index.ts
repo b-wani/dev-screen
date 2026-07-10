@@ -62,6 +62,15 @@ const api = {
     ipcRenderer.invoke(IpcChannel.CaptureStart, mode),
   /** arming 취소 — 툴바를 닫고 idle 로. */
   captureCancel: (): Promise<void> => ipcRenderer.invoke(IpcChannel.CaptureCancel),
+  /** 캡처 모드 전환을 알린다(Window 는 선택 오버레이 생성, 그 외는 파괴). */
+  captureSetMode: (mode: CaptureMode): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.CaptureSetMode, mode),
+  /** Window 선택 오버레이의 호버 상태 변화를 알린다(창 위=클릭 캡처, 빈 데스크톱=클릭스루). */
+  overlayHover: (hovering: boolean): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.OverlayHover, hovering),
+  /** Window 선택 오버레이에서 창을 클릭해 확정 — 그 대상으로 녹화를 시작한다. */
+  overlaySelect: (targetId: string): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.OverlaySelect, targetId),
   /** 온보딩 완료를 로컬에 저장한다. 마지막 단계 완료 액션에서 호출한다. */
   completeOnboarding: (): Promise<void> => ipcRenderer.invoke(IpcChannel.OnboardingComplete),
   /** 화면 녹화·손쉬운 사용 권한의 granted 여부를 조회한다(권한 단계 250ms 폴링). */

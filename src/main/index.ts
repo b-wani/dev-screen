@@ -35,7 +35,8 @@ import {
   type CaptureMode,
   type RecordingState,
   type RecordingSummary,
-  type ExportSaveResult
+  type ExportSaveResult,
+  type OverlayContext
 } from '../shared/ipc'
 import { buildWindowHash, type WindowRole } from '../shared/window-url'
 import type { RenderRecipe } from '../shared/recipe'
@@ -522,6 +523,62 @@ function destroyToolbars(): void {
 }
 
 /**
+ * Window 선택 오버레이 창(#73). 모든 디스플레이 bounds 를 합친 가상 데스크톱 전체를
+ * 덮는 단일 프레임 없는 투명 창이다. 기본은 클릭스루(`setIgnoreMouseEvents(true,
+ * {forward:true})`) — 마우스 이동은 렌더러로 포워딩돼 호버 하이라이트를 그릴 수 있지만
+ * 클릭은 아래 창으로 그대로 흘러간다. 렌더러가 커서 아래 창을 찾으면(hitTest) 그 순간만
+ * `overlay:hover`로 알려 클릭스루를 잠깐 끄고, 그 클릭을 오버레이가 직접 받아 확정한다
+ * (`overlay:select`) — 그래서 빈 데스크톱 클릭은 아래로 흘러 사실상 무시되고, 창 위
+ * 클릭만 오버레이가 가로챈다.
+ */
+function createWindowPickerOverlay(): WindowEntry<BrowserWindow> {
+  const displays = screen.getAllDisplays()
+  const minX = Math.min(...displays.map((d) => d.bounds.x))
+  const minY = Math.min(...displays.map((d) => d.bounds.y))
+  const maxX = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width))
+  const maxY = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height))
+  const context: OverlayContext = {
+    screenHeightPt: screen.getPrimaryDisplay().size.height,
+    originX: minX,
+    originY: minY
+  }
+
+  const entry = createRoleWindow(
+    'overlay',
+    {
+      x: minX,
+      y: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      frame: false,
+      transparent: true,
+      hasShadow: false,
+      resizable: false,
+      movable: false,
+      focusable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      show: false
+    },
+    context
+  )
+  const win = entry.window
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.setContentProtection(true)
+  win.setIgnoreMouseEvents(true, { forward: true })
+  if (process.platform === 'darwin') {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
+  win.once('ready-to-show', () => win.show())
+  return entry
+}
+
+/** 열려 있는 선택 오버레이 창을 모두 파괴한다(모드 전환·취소·확정 공통). */
+function destroyOverlays(): void {
+  for (const entry of registry.allByRole('overlay')) entry.window.destroy()
+}
+
+/**
  * 캡처 툴바를 소환한다(idle→arming). 이미 떠 있으면 새로 만들지 않고 포커스한다.
  * ⌥⌘R·메뉴바 좌클릭·트레이 '녹화 시작'이 공유하는 진입점.
  */
@@ -536,16 +593,32 @@ function summonToolbar(): void {
   applyState({ status: 'arming' })
 }
 
-/** arming 취소 — 툴바를 닫고 idle 로 되돌린다(Esc/✕). */
+/** arming 취소 — 툴바·오버레이를 닫고 idle 로 되돌린다(Esc/✕). */
 function cancelArming(): void {
   destroyToolbars()
+  destroyOverlays()
   if (currentState.status === 'arming') applyState({ status: 'idle' })
 }
 
 /**
+ * 캡처 툴바의 모드 전환을 반영한다(#73). Window 는 선택 오버레이를 띄우고(이미 있으면
+ * 그대로 두고), 그 외 모드는 열려 있는 오버레이를 닫는다. Area 는 대상 선택 오버레이
+ * (#72)가 아직 없다.
+ */
+function setCaptureMode(mode: CaptureMode): void {
+  if (mode === 'window') {
+    if (!registry.firstByRole('overlay')) createWindowPickerOverlay()
+  } else {
+    destroyOverlays()
+  }
+}
+
+/**
  * 캡처 툴바에서 고른 모드로 녹화를 시작한다. Display 는 주 디스플레이를 잡아 바로 녹화한다.
- * Window/Area 는 대상 선택 오버레이(#72/#73)가 아직 없어 UI 에서 비활성이라 여기 도달하지 않는다
- * (도달해도 무시). 카운트다운은 렌더러가 처리하고 여기선 즉시 시작한다.
+ * Window 는 선택 오버레이(#73)의 클릭 확정(`overlay:select`)이 대신 이 경로를 타지 않고
+ * `startRecording` 을 직접 부른다. Area 는 대상 선택 오버레이(#72)가 아직 없어 UI 에서
+ * 비활성이라 여기 도달하지 않는다(도달해도 무시). 카운트다운은 렌더러가 처리하고 여기선
+ * 즉시 시작한다.
  */
 async function startFromToolbar(mode: CaptureMode): Promise<void> {
   if (mode !== 'display') return
@@ -560,6 +633,16 @@ async function startFromToolbar(mode: CaptureMode): Promise<void> {
   destroyToolbars()
   if (targetId) void startRecording(targetId)
   else applyState({ status: 'error', code: 'no-display', message: PERMISSION_MESSAGE })
+}
+
+/**
+ * Window 선택 오버레이에서 창을 클릭해 확정했다(#73). 툴바·오버레이를 닫고 그 대상으로
+ * 바로 녹화를 시작한다 — Display 의 `startFromToolbar` 와 달리 대상이 이미 정해져 있다.
+ */
+function selectWindowTarget(targetId: string): void {
+  destroyToolbars()
+  destroyOverlays()
+  void startRecording(targetId)
 }
 
 function registerIpc(): void {
@@ -656,6 +739,16 @@ function registerIpc(): void {
   // 캡처 툴바: 고른 모드로 녹화 시작(Display=주 디스플레이) · arming 취소.
   ipcMain.handle(IpcChannel.CaptureStart, (_e, mode: CaptureMode) => startFromToolbar(mode))
   ipcMain.handle(IpcChannel.CaptureCancel, () => cancelArming())
+  // 모드 전환 — Window 는 선택 오버레이를 띄우고, 그 외는 닫는다.
+  ipcMain.handle(IpcChannel.CaptureSetMode, (_e, mode: CaptureMode) => setCaptureMode(mode))
+
+  // Window 선택 오버레이(#73): 호버 상태에 따라 그 창의 클릭스루를 토글하고(hover=true 면
+  // 다음 클릭을 오버레이가 직접 받도록 끈다), 클릭 확정은 그 대상으로 바로 녹화를 시작한다.
+  ipcMain.handle(IpcChannel.OverlayHover, (e, hovering: boolean) => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    win?.setIgnoreMouseEvents(!hovering, hovering ? undefined : { forward: true })
+  })
+  ipcMain.handle(IpcChannel.OverlaySelect, (_e, targetId: string) => selectWindowTarget(targetId))
 
   // 완료 시 플래그를 저장하고 Welcome 창을 닫은 뒤(#80), shell 창을 보인다(없으면 새로 만든다).
   ipcMain.handle(IpcChannel.OnboardingComplete, async () => {
