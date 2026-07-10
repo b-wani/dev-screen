@@ -112,7 +112,7 @@ export class AppTray {
       recent.length === 0
         ? [{ label: '(없음)', enabled: false }]
         : recent.slice(0, 8).map((r) => ({
-            label: r.name,
+            label: r.title,
             click: () => this.cb.onOpenRecording(r.folder)
           }))
 

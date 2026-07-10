@@ -9,6 +9,7 @@ function summary(overrides: Partial<RecordingSummary>): RecordingSummary {
     startedAt: 0,
     durationMs: 0,
     eventCount: 0,
+    title: 'x',
     ...overrides
   }
 }
