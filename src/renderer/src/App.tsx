@@ -8,6 +8,7 @@ import { ErrorView } from './views/ErrorView'
 import { WelcomeView } from './views/WelcomeView'
 import { PlaceholderView } from './views/PlaceholderView'
 import { ToolbarView } from './views/ToolbarView'
+import { WindowPickerOverlayView } from './views/WindowPickerOverlayView'
 
 export default function App(): JSX.Element {
   // 이 창의 정체(id·role) — main 이 URL 해시로 실어 준다(#69). 없으면(구 진입 경로 등)
@@ -36,6 +37,11 @@ export default function App(): JSX.Element {
   // 판정·자동/수동 소환·완료 후 창 닫힘은 모두 main이 맡는다.
   if (role === 'welcome') {
     return <WelcomeView />
+  }
+
+  // Window 선택 오버레이(#73) — 가상 데스크톱 전체를 덮는 딤 창이라 .app 크롬 없이 그린다.
+  if (role === 'overlay' && params) {
+    return <WindowPickerOverlayView windowId={params.id} />
   }
 
   // 그 밖의 아직 전용 화면이 없는 role 창은 자리표시자로 골격이 닿았음을 보인다.

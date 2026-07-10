@@ -1215,6 +1215,12 @@ body {
   padding: 0 var(--space-2);
 }
 
+.toolbar-hint {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-2);
+}
+
 .settings-popover {
   position: absolute;
   bottom: calc(100% + var(--space-2));
@@ -1267,6 +1273,7 @@ body {
   color: var(--text-3);
 }
 
+<<<<<<< HEAD
 /* ── Welcome 창 셸 (#80) — 마스코트 히어로 + 챕터 내비 + 본문 패널 + 하단 바 ─── */
 .welcome {
   display: flex;
@@ -1421,4 +1428,36 @@ body {
 .welcome-btns {
   display: flex;
   gap: var(--space-3);
+}
+
+/* ── Window 선택 오버레이 (#73) — 가상 데스크톱을 덮는 딤 창 ────────────────── */
+
+.window-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 20, 10, 0.55);
+}
+
+.window-picker-highlight {
+  position: absolute;
+  border: 2px solid var(--grass);
+  border-radius: var(--radius-s);
+  box-shadow: 0 0 24px rgba(76, 201, 63, 0.45);
+  background: rgba(76, 201, 63, 0.08);
+}
+
+.window-picker-label {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  max-width: calc(100% - var(--space-4));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }

@@ -35,6 +35,12 @@ export const IpcChannel = {
   CaptureStart: 'capture:start',
   /** arming 취소 — 캡처 툴바·오버레이를 닫고 idle 로 되돌린다(Esc/✕). */
   CaptureCancel: 'capture:cancel',
+  /** 캡처 모드 전환을 알린다 — Window 는 선택 오버레이를 띄우고, 그 외는 오버레이를 닫는다(#73). */
+  CaptureSetMode: 'capture:set-mode',
+  /** Window 선택 오버레이의 호버 상태 변화 — main 이 오버레이 창의 클릭스루 여부를 토글한다(#73). */
+  OverlayHover: 'overlay:hover',
+  /** Window 선택 오버레이에서 창을 클릭해 확정 — 그 대상으로 녹화를 시작한다(#73). */
+  OverlaySelect: 'overlay:select',
   /** 온보딩 완료를 로컬(userData)에 저장한다(마지막 단계 완료 액션). */
   OnboardingComplete: 'onboarding:complete',
   /** 화면 녹화·손쉬운 사용 권한의 granted 여부를 조회한다(온보딩 권한 단계 폴링). */
@@ -69,6 +75,18 @@ export interface ExportSaveResult {
 
 /** 캡처 툴바의 3모드. 활성 모드에 따라 자식 선택 오버레이(#71~#73)가 다르게 그려진다. */
 export type CaptureMode = 'display' | 'window' | 'area'
+
+/**
+ * Window 선택 오버레이 창의 초기 컨텍스트(#73) — main 이 창 생성 시 넣어 둔다.
+ * 오버레이는 전체 가상 데스크톱(모든 디스플레이 bounds 합집합)을 덮는 단일 창이라,
+ * flipped 좌표(Electron 화면 좌표)를 오버레이 로컬 DOM 좌표로 옮기려면 자신의 전역
+ * 원점(originX/Y)을 알아야 한다. screenHeightPt는 flip 환산의 기준(주 디스플레이 높이).
+ */
+export interface OverlayContext {
+  screenHeightPt: number
+  originX: number
+  originY: number
+}
 
 /** 녹화 워크플로의 상태 머신. 렌더러는 이 상태만 보고 화면을 그린다. */
 export type RecordingState =

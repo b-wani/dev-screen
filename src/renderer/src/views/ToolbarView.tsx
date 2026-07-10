@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CaptureMode } from '../../../shared/ipc'
 
-/** 3모드 세그먼트 정의. Display 만 이번 티켓에서 녹화까지 이어진다(#70). */
+/** 3모드 세그먼트 정의. Display/Window 가 이번 티켓들에서 녹화까지 이어진다(#70/#73). */
 const MODES: { mode: CaptureMode; label: string; icon: string }[] = [
   { mode: 'display', label: 'Display', icon: '◱' },
   { mode: 'window', label: 'Window', icon: '▤' },
@@ -10,8 +10,9 @@ const MODES: { mode: CaptureMode; label: string; icon: string }[] = [
 
 /**
  * 캡처 툴바 — arming 상태의 얼굴(#70). 플로팅 pill 창 안에 3모드 세그먼트 + 설정 팝오버 +
- * 시작/취소를 그린다. Display 는 주 디스플레이로 바로 녹화하고, Window/Area 의 대상 선택
- * 오버레이는 후속 티켓(#72/#73)이라 여기선 비활성이다. 마스코트는 넣지 않는다(기능 크롬).
+ * 시작/취소를 그린다. Display 는 주 디스플레이로 바로 녹화하고, Window 는 자식 선택
+ * 오버레이(#73)에서 창을 클릭해 확정한다(툴바에 별도 Start 버튼 없음). Area 의 대상 선택
+ * 오버레이는 후속 티켓(#72)이라 여기선 비활성이다. 마스코트는 넣지 않는다(기능 크롬).
  */
 export function ToolbarView(): JSX.Element {
   const [mode, setMode] = useState<CaptureMode>('display')
@@ -19,7 +20,12 @@ export function ToolbarView(): JSX.Element {
   const [countdownOn, setCountdownOn] = useState(true)
   const [count, setCount] = useState<number | null>(null)
 
-  const canRecord = mode === 'display' // Window/Area 는 오버레이(#72/#73) 대기
+  const canRecord = mode === 'display' // Area 는 오버레이(#72) 대기
+
+  // 모드 전환을 main 에 알린다 — Window 는 선택 오버레이(자식 창)를 띄우고, 그 외는 닫는다.
+  useEffect(() => {
+    void window.recap.captureSetMode(mode)
+  }, [mode])
 
   // Esc = 취소(어느 컨트롤에 포커스가 있든). 카운트다운 중이면 카운트다운만 중단한다.
   useEffect(() => {
@@ -112,6 +118,8 @@ export function ToolbarView(): JSX.Element {
           <button type="button" className="btn btn-record toolbar-start" onClick={onStart}>
             ● 녹화 시작
           </button>
+        ) : mode === 'window' ? (
+          <span className="toolbar-hint">창을 클릭해 선택하세요</span>
         ) : (
           <span className="toolbar-soon" title="선택 오버레이는 곧 지원됩니다">
             오버레이 준비 중
