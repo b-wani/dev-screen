@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IpcChannel,
   type CaptureTarget,
+  type CaptureMode,
   type RecordingState,
   type RecordingSummary,
   type ExportSaveResult
@@ -56,6 +57,11 @@ const api = {
   /** 이 창의 초기 컨텍스트를 windowId 로 당겨온다(부팅 시 role 별 페이로드 로드). */
   getWindowContext: (id: number): Promise<unknown> =>
     ipcRenderer.invoke(IpcChannel.WindowGetContext, id),
+  /** 캡처 툴바에서 고른 모드로 녹화를 시작한다(Display=주 디스플레이). */
+  captureStart: (mode: CaptureMode): Promise<void> =>
+    ipcRenderer.invoke(IpcChannel.CaptureStart, mode),
+  /** arming 취소 — 툴바를 닫고 idle 로. */
+  captureCancel: (): Promise<void> => ipcRenderer.invoke(IpcChannel.CaptureCancel),
   /** 온보딩 완료 여부를 조회한다. 앱 시작 시 온보딩/기존 화면 분기에 쓴다. */
   onboardingStatus: (): Promise<boolean> => ipcRenderer.invoke(IpcChannel.OnboardingStatus),
   /** 온보딩 완료를 로컬에 저장한다. 마지막 단계 완료 액션에서 호출한다. */

@@ -31,6 +31,10 @@ export const IpcChannel = {
   WindowOpen: 'window:open',
   /** 창 생성 시 main 이 넣어 둔 초기 컨텍스트를 windowId 로 당겨온다(렌더러 부팅 pull). */
   WindowGetContext: 'window:get-context',
+  /** 캡처 툴바에서 고른 모드로 녹화를 시작한다(Display 는 주 디스플레이). arming→recording. */
+  CaptureStart: 'capture:start',
+  /** arming 취소 — 캡처 툴바·오버레이를 닫고 idle 로 되돌린다(Esc/✕). */
+  CaptureCancel: 'capture:cancel',
   /** 온보딩 완료 여부를 조회한다(앱 시작 시 렌더러가 온보딩/기존 화면을 분기). */
   OnboardingStatus: 'onboarding:status',
   /** 온보딩 완료를 로컬(userData)에 저장한다(마지막 단계 완료 액션). */
@@ -65,9 +69,14 @@ export interface ExportSaveResult {
   sizeBytes: number
 }
 
+/** 캡처 툴바의 3모드. 활성 모드에 따라 자식 선택 오버레이(#71~#73)가 다르게 그려진다. */
+export type CaptureMode = 'display' | 'window' | 'area'
+
 /** 녹화 워크플로의 상태 머신. 렌더러는 이 상태만 보고 화면을 그린다. */
 export type RecordingState =
   | { status: 'idle' }
+  /** 캡처 툴바가 떠 대상·모드를 고르는 중(녹화 전). ⌥⌘R/메뉴바 소환으로 진입, Esc/✕로 idle. */
+  | { status: 'arming' }
   | { status: 'recording'; startedAt: number; eventCount: number; target: CaptureTarget }
   | {
       status: 'preview'

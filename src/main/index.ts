@@ -6,6 +6,7 @@ import {
   ipcMain,
   protocol,
   net,
+  screen,
   systemPreferences,
   desktopCapturer,
   nativeImage,
@@ -31,6 +32,7 @@ import {
 import {
   IpcChannel,
   type CaptureTarget,
+  type CaptureMode,
   type RecordingState,
   type RecordingSummary,
   type ExportSaveResult
@@ -68,8 +70,6 @@ let appTray: AppTray | null = null
 let isQuitting = false
 /** 최신 녹화 상태 — 트레이/단축키 토글이 idle↔recording 을 판단하는 근거. */
 let currentState: RecordingState = { status: 'idle' }
-/** 마지막으로 녹화한 캡처 대상 id — ⌥⌘R/트레이의 '기본 대상'으로 재사용한다. */
-let lastTargetId: string | null = null
 
 /** 목록·녹화 등 기본 화면의 창 크기. */
 const DEFAULT_WINDOW_SIZE = { width: 1180, height: 760 }
@@ -109,7 +109,6 @@ const recorder = new Recorder(sidecarPath())
  */
 function applyState(state: RecordingState): void {
   currentState = state
-  if (state.status === 'recording') lastTargetId = state.target.id
   // 지금은 shell 창이 idle/recording/preview/error 를 모두 그리므로 shell 에 보낸다.
   // #74 에서 캡처 상태 구독 role(툴바·오버레이·트레이·REC 알약)로 타깃 전송을 일반화한다.
   shellWindow()?.webContents.send(IpcChannel.State, state)
@@ -296,25 +295,16 @@ async function startRecording(targetId: string): Promise<void> {
   })
 }
 
-/** ⌥⌘R · 트레이 토글. 녹화 중이면 정지, 아니면 마지막/기본 대상으로 시작한다. */
-async function toggleRecord(): Promise<void> {
+/**
+ * ⌥⌘R · 트레이 토글. 녹화 중이면 정지, 아니면 캡처 툴바를 소환한다(#70). 예전처럼 즉시
+ * 녹화를 시작하지 않고, 대상·모드는 툴바와 자식 오버레이에서 고른다.
+ */
+function toggleRecord(): void {
   if (recorder.isRecording) {
     recorder.stop()
     return
   }
-  let targetId = lastTargetId
-  if (!targetId) {
-    // 처음 실행 등 마지막 대상이 없으면 사용 가능한 첫 대상을 기본으로 잡는다.
-    try {
-      if (!(await ensureScreenAccess())) throw new Error(PERMISSION_MESSAGE)
-      const targets = await recorder.listTargets()
-      targetId = targets[0]?.id ?? null
-    } catch {
-      // 목록 실패(권한 등)면 런처를 열어 사용자가 직접 고르게 한다.
-    }
-  }
-  if (targetId) void startRecording(targetId)
-  else showLauncher()
+  summonToolbar()
 }
 
 /**
@@ -443,6 +433,91 @@ function ensureShellWindow(): void {
   if (!shellWindow()) createShellWindow()
 }
 
+/** 캡처 툴바 창의 크기(플로팅 pill). 렌더러가 이 안에 알약 크롬을 그린다. */
+const TOOLBAR_SIZE = { width: 520, height: 96 }
+
+/**
+ * 캡처 툴바 창(arming 의 얼굴, #70). 온디맨드 플로팅 pill — 프레임 없는 투명 창을
+ * 주 디스플레이 작업영역 하단 중앙에 띄운다. `screen-saver` 레벨 always-on-top 이라
+ * 전체화면 앱 위에도 뜨고, content-protection 으로 녹화 화면에는 찍히지 않는다.
+ */
+function createToolbarWindow(): WindowEntry<BrowserWindow> {
+  const { workArea } = screen.getPrimaryDisplay()
+  const x = Math.round(workArea.x + (workArea.width - TOOLBAR_SIZE.width) / 2)
+  const y = Math.round(workArea.y + workArea.height - TOOLBAR_SIZE.height - 48)
+  const entry = createRoleWindow('toolbar', {
+    width: TOOLBAR_SIZE.width,
+    height: TOOLBAR_SIZE.height,
+    x,
+    y,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    movable: true,
+    fullscreenable: false,
+    skipTaskbar: true,
+    show: false
+  })
+  const win = entry.window
+  win.setAlwaysOnTop(true, 'screen-saver')
+  win.setContentProtection(true)
+  if (process.platform === 'darwin') {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  }
+  win.once('ready-to-show', () => {
+    win.show()
+    win.focus()
+  })
+  return entry
+}
+
+/** 열려 있는 캡처 툴바 창을 모두 파괴한다(arming 종료 — 취소/녹화 시작 공통). */
+function destroyToolbars(): void {
+  for (const entry of registry.allByRole('toolbar')) entry.window.destroy()
+}
+
+/**
+ * 캡처 툴바를 소환한다(idle→arming). 이미 떠 있으면 새로 만들지 않고 포커스한다.
+ * ⌥⌘R·메뉴바 좌클릭·트레이 '녹화 시작'이 공유하는 진입점.
+ */
+function summonToolbar(): void {
+  const existing = registry.firstByRole('toolbar')
+  if (existing) {
+    existing.window.show()
+    existing.window.focus()
+    return
+  }
+  createToolbarWindow()
+  applyState({ status: 'arming' })
+}
+
+/** arming 취소 — 툴바를 닫고 idle 로 되돌린다(Esc/✕). */
+function cancelArming(): void {
+  destroyToolbars()
+  if (currentState.status === 'arming') applyState({ status: 'idle' })
+}
+
+/**
+ * 캡처 툴바에서 고른 모드로 녹화를 시작한다. Display 는 주 디스플레이를 잡아 바로 녹화한다.
+ * Window/Area 는 대상 선택 오버레이(#72/#73)가 아직 없어 UI 에서 비활성이라 여기 도달하지 않는다
+ * (도달해도 무시). 카운트다운은 렌더러가 처리하고 여기선 즉시 시작한다.
+ */
+async function startFromToolbar(mode: CaptureMode): Promise<void> {
+  if (mode !== 'display') return
+  let targetId: string | null = null
+  try {
+    if (!(await ensureScreenAccess())) throw new Error(PERMISSION_MESSAGE)
+    const targets = await recorder.listTargets()
+    targetId = targets.find((t) => t.kind === 'display')?.id ?? targets[0]?.id ?? null
+  } catch {
+    // 목록 실패(권한 등)는 아래 분기에서 안내한다.
+  }
+  destroyToolbars()
+  if (targetId) void startRecording(targetId)
+  else applyState({ status: 'error', code: 'no-display', message: PERMISSION_MESSAGE })
+}
+
 function registerIpc(): void {
   ipcMain.handle(IpcChannel.ListTargets, async () => {
     if (!(await ensureScreenAccess())) throw new Error(PERMISSION_MESSAGE)
@@ -528,6 +603,10 @@ function registerIpc(): void {
 
   // 창 생성 시 넣어 둔 초기 컨텍스트를 windowId 로 돌려준다(렌더러 부팅 pull). 없으면 null.
   ipcMain.handle(IpcChannel.WindowGetContext, (_e, id: number) => registry.get(id)?.context ?? null)
+
+  // 캡처 툴바: 고른 모드로 녹화 시작(Display=주 디스플레이) · arming 취소.
+  ipcMain.handle(IpcChannel.CaptureStart, (_e, mode: CaptureMode) => startFromToolbar(mode))
+  ipcMain.handle(IpcChannel.CaptureCancel, () => cancelArming())
 
   // 온보딩 완료 여부 조회·저장 (userData에 플래그). 렌더러 최상단 화면 분기가 쓴다.
   ipcMain.handle(IpcChannel.OnboardingStatus, () => isOnboardingComplete(app.getPath('userData')))

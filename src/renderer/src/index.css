@@ -62,7 +62,9 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* 배경은 .app 이 칠한다 — 캡처 툴바(#70)는 프레임 없는 투명 창이라 body 가 투명해야
+     알약만 떠 보인다. shell·플레이스홀더는 .app 로 감싸므로 배경이 유지된다. */
+  background: transparent;
   color: var(--text-1);
 }
 
@@ -72,6 +74,7 @@ body {
   flex-direction: column;
   padding: var(--space-5) var(--space-5) var(--space-4);
   gap: var(--space-4);
+  background: var(--bg);
 }
 
 .title {
@@ -1189,4 +1192,142 @@ body {
   .editor-sidebar {
     max-height: 42vh;
   }
+}
+
+/* ── 캡처 툴바 (#70) — 프레임 없는 플로팅 pill ───────────────────────────── */
+
+.toolbar {
+  -webkit-app-region: drag; /* 창 자체를 잡아 끌 수 있게 */
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-3);
+  margin: var(--space-2);
+  height: calc(100vh - var(--space-4));
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.toolbar button,
+.toolbar input,
+.toolbar .settings-popover {
+  -webkit-app-region: no-drag; /* 컨트롤은 드래그가 아니라 클릭 */
+}
+
+.toolbar-modes {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+}
+
+.mode-seg {
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.mode-seg.is-active {
+  background: var(--grass);
+  color: var(--grass-ink);
+  font-weight: 600;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolbar-settings {
+  position: relative;
+}
+
+.icon-btn {
+  border: none;
+  background: var(--surface-2);
+  color: var(--text-1);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+.icon-btn:hover,
+.icon-btn.is-active {
+  background: var(--surface-3);
+}
+
+.toolbar-start {
+  white-space: nowrap;
+}
+
+.toolbar-soon {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-2);
+}
+
+.settings-popover {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  right: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-1);
+}
+
+.settings-readout {
+  color: var(--text-2);
+}
+
+.settings-row .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-countdown {
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.countdown-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--rec);
+  line-height: 1;
+}
+
+.countdown-hint {
+  font-size: var(--text-xs);
+  color: var(--text-3);
 }
