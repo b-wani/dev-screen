@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hoppy 에디터 — 화면 상세 목업 (#58)</title>
+<style>
+  :root {
+    --bg: #0c140a;
+    --surface: #131d10;
+    --surface-2: #1a2716;
+    --surface-3: #22331d;
+    --border: rgba(180,230,160,0.10);
+    --border-strong: rgba(180,230,160,0.18);
+    --text-1: #f2f6ee;
+    --text-2: #a7bd9c;
+    --text-3: #6f8465;
+    --grass: #4cc93f;
+    --grass-hover: #5cd94e;
+    --grass-ink: #0a1f0c;
+    --rec: #ff4b4b;
+    --rec-hover: #ff6161;
+    --zoom: #44513d;
+    --zoom-hover: #54634b;
+    --warn: #ffc233;
+    --r-s: 8px;
+    --r-m: 12px;
+    --r-l: 16px;
+    --r-pill: 999px;
+    --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    --display: "SF Pro Rounded", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--ui);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .display { font-family: var(--display); }
+
+  /* 창 그리드: 상단바 / 본문(프리뷰+패널) / 타임라인 */
+  .win {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 52px 1fr 208px;
+    overflow: hidden;
+  }
+
+  /* ── 상단 바 ── */
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .bar-title {
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .rec-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--rec); display: inline-block; }
+  .bar-meta { color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+  .chip {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    padding: 3px 9px;
+    border-radius: var(--r-pill);
+    font-size: 12px;
+  }
+  .dot-sep { color: var(--text-3); }
+  .bar-spacer { flex: 1; }
+
+  .btn {
+    font-family: var(--ui);
+    font-size: 13px;
+    border: 1px solid var(--border);
+    background: var(--surface-3);
+    color: var(--text-1);
+    padding: 7px 13px;
+    border-radius: var(--r-pill);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { border-color: var(--border-strong); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-rec { background: var(--rec); border-color: transparent; color: #fff; }
+  .btn-rec:hover { background: var(--rec-hover); }
+  .btn-primary { background: var(--grass); border-color: transparent; color: var(--grass-ink); font-weight: 600; }
+  .btn-primary:hover { background: var(--grass-hover); }
+  .btn-danger { background: transparent; border-color: rgba(255,75,75,0.4); color: var(--rec); width: 100%; justify-content: center; }
+  .btn-danger:hover { background: rgba(255,75,75,0.08); }
+
+  /* ── 본문 ── */
+  .body {
+    display: grid;
+    grid-template-columns: 1fr 324px;
+    min-height: 0;
+  }
+
+  /* 프리뷰 */
+  .stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 28px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(76,201,63,0.05), transparent 60%),
+      var(--bg);
+    min-height: 0;
+  }
+  /* 배경/패딩이 입혀진 "완성 프레임" (콘텐츠 = 영상 데이터, 여기엔 그라디언트 배경 허용) */
+  .frame-bg {
+    width: min(100%, 720px);
+    aspect-ratio: 16 / 10;
+    background: linear-gradient(145deg, #2b2b30, #161618);
+    border-radius: var(--r-l);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7%;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+  }
+  /* 녹화된 화면(가짜 코드 에디터) */
+  .shot {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: #0f1216;
+    overflow: hidden;
+    box-shadow: 0 14px 34px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+  }
+  .shot-bar { height: 26px; background: #171b21; display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+  .tl-light { width: 9px; height: 9px; border-radius: 999px; }
+  .shot-body { flex: 1; padding: 14px 16px; font-family: var(--mono); font-size: 11px; line-height: 1.7; }
+  .code-line { display: block; white-space: pre; }
+  .c-kw { color: #c586c0; } .c-fn { color: #6cb6ff; } .c-str { color: #a5d6a5; } .c-mut { color: #5a6270; }
+  /* 커서 + 클릭 리플 (자동 효과 시각화) */
+  .cursor { position: absolute; left: 58%; top: 54%; font-size: 18px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+  .ripple { position: absolute; left: 58%; top: 55%; width: 34px; height: 34px; margin: -17px 0 0 -17px; border: 2px solid var(--grass); border-radius: 999px; opacity: .5; }
+  /* 뷰포트 배지 + 맥락 배지 (오버레이 배지 — 최종 영상 합성 요소) */
+  .badges { position: absolute; left: 14px; bottom: 12px; display: flex; gap: 6px; }
+  .badge {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    background: rgba(0,0,0,0.55);
+    color: #e8efe4;
+    padding: 3px 8px;
+    border-radius: var(--r-s);
+    backdrop-filter: blur(4px);
+  }
+  .zoom-tag {
+    position: absolute; right: 14px; top: 12px;
+    font-family: var(--mono); font-size: 11px;
+    background: rgba(0,0,0,0.5); color: var(--text-1);
+    padding: 3px 8px; border-radius: var(--r-s);
+  }
+
+  /* ── 우측 설정 패널 ── */
+  .panel {
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 14px;
+  }
+  .section { border: 1px solid var(--border); border-radius: var(--r-l); background: var(--surface); padding: 13px; margin-bottom: 12px; }
+  .section-title { font-family: var(--display); font-size: 13px; font-weight: 600; color: var(--text-1); margin: 0 0 10px; display: flex; align-items: center; justify-content: space-between; }
+  .tag-open { font-family: var(--ui); font-size: 10px; font-weight: 500; color: var(--warn); border: 1px solid rgba(255,194,51,0.4); border-radius: var(--r-pill); padding: 1px 7px; }
+  .control { margin-bottom: 12px; }
+  .control:last-child { margin-bottom: 0; }
+  .control-label { display: flex; justify-content: space-between; align-items: center; color: var(--text-2); margin-bottom: 7px; }
+  .control-value { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text-1); }
+
+  /* 스와치 */
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { width: 38px; height: 30px; border-radius: var(--r-s); border: 2px solid transparent; cursor: pointer; outline: 1px solid var(--border); }
+  .swatch.is-active { border-color: var(--grass); }
+  .swatch.solid { background: #1c1c1e; display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 10px; }
+  .swatch.ghost { opacity: .45; outline-style: dashed; display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: 15px; }
+
+  /* 슬라이더 */
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 4px; border-radius: 999px; background: var(--surface-3); outline: none; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 999px; background: var(--grass); cursor: pointer; }
+
+  /* 세그먼트(pill) */
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 2px; gap: 2px; }
+  .seg button { font-family: var(--ui); font-size: 12px; border: none; background: transparent; color: var(--text-2); padding: 5px 12px; border-radius: var(--r-pill); cursor: pointer; }
+  .seg button.mono { font-family: var(--mono); }
+  .seg button.is-active { background: var(--grass); color: var(--grass-ink); font-weight: 600; }
+
+  /* 토글 스위치 */
+  .row-check { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .row-check:last-child { margin-bottom: 0; }
+  .row-check span { color: var(--text-1); }
+  .switch { width: 38px; height: 22px; border-radius: 999px; background: var(--surface-3); position: relative; cursor: pointer; border: 1px solid var(--border); }
+  .switch.on { background: var(--grass); border-color: transparent; }
+  .switch i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: #fff; transition: left .12s; }
+  .switch.on i { left: 18px; }
+
+  .text-in { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-s); color: var(--text-1); padding: 7px 9px; font-family: var(--ui); }
+  .text-in::placeholder { color: var(--text-3); }
+
+  /* 익스포트 미니 프리셋 표기 */
+  .preset-line { display: flex; align-items: center; justify-content: space-between; color: var(--text-2); font-size: 12px; margin-top: 8px; }
+  .preset-line .mono { color: var(--text-1); }
+
+  .meta-dl { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 12px; color: var(--text-3); font-size: 12px; line-height: 1.9; }
+  .meta-dl b { color: var(--text-2); font-weight: 500; }
+
+  /* ── 타임라인 ── */
+  .timeline { background: var(--surface); border-top: 1px solid var(--border); padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .transport { display: flex; align-items: center; gap: 12px; }
+  .tbtn { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-3); color: var(--text-1); font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  .tbtn.play { width: 40px; height: 40px; background: var(--grass); color: var(--grass-ink); border-color: transparent; font-size: 16px; }
+  .timecode { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; color: var(--text-1); }
+  .timecode .tot { color: var(--text-3); }
+  .transport-spacer { flex: 1; }
+  .lane-hint { color: var(--text-3); font-size: 11px; }
+
+  .lanes { position: relative; }
+  .lane { position: relative; border-radius: var(--r-m); overflow: hidden; }
+  .lane-clip { height: 46px; margin-bottom: 8px; background: var(--surface-2); border: 1px solid var(--border); display: flex; }
+  .film { flex: 1; background:
+      repeating-linear-gradient(90deg, #1d2a18 0 1px, transparent 1px 64px),
+      linear-gradient(90deg, #22301c, #1a2616);
+  }
+  /* 트림 딤(앞/뒤) + 트림 핸들(앰버) */
+  .trim-dim { position: absolute; top: 0; bottom: 0; background: rgba(6,10,5,0.62); z-index: 2; }
+  .trim-handle { position: absolute; top: 0; bottom: 0; width: 8px; background: var(--warn); z-index: 3; cursor: ew-resize; border-radius: 3px; }
+  .trim-handle::after { content: ""; position: absolute; left: 3px; top: 50%; width: 2px; height: 16px; margin-top: -8px; background: rgba(0,0,0,0.35); }
+
+  .lane-zoom { height: 40px; background: var(--surface-2); border: 1px solid var(--border); }
+  .zoom-seg { position: absolute; top: 5px; height: 30px; background: var(--zoom); border: 1px solid var(--zoom-hover); border-radius: var(--r-s); display: flex; align-items: center; justify-content: center; cursor: grab; z-index: 2; }
+  .zoom-seg.is-selected { outline: 2px solid var(--grass); outline-offset: 0; }
+  .zoom-seg .label { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text-1); }
+  .zoom-seg .edge { position: absolute; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+  .zoom-seg .edge.l { left: 0; } .zoom-seg .edge.r { right: 0; }
+  .zoom-seg .edge::after { content: ""; position: absolute; left: 2px; top: 50%; width: 2px; height: 12px; margin-top: -6px; background: rgba(242,246,238,0.5); }
+
+  /* 재생 헤드(양 레인 관통) */
+  .playhead { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text-1); z-index: 5; }
+  .playhead::before { content: ""; position: absolute; top: -5px; left: -4px; border: 5px solid transparent; border-top-color: var(--text-1); }
+
+  .lane-tags { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .lane-tags span { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+<div class="win">
+
+  <!-- ── 상단 바 ── -->
+  <header class="bar">
+    <span class="bar-title"><span class="rec-dot"></span>로그인 폼 리팩터 데모</span>
+    <span class="bar-meta">
+      <span class="chip">창 · Chrome</span>
+      <span class="dot-sep">·</span>
+      <span class="mono">00:41</span>
+      <span class="meta-sub" style="color:var(--text-3)">(원본 00:52)</span>
+    </span>
+    <span class="bar-spacer"></span>
+    <button class="btn btn-rec btn-sm">● 같은 대상 다시 녹화</button>
+    <button class="btn btn-primary">익스포트 ▸</button>
+  </header>
+
+  <!-- ── 본문: 프리뷰 + 우측 패널 ── -->
+  <div class="body">
+
+    <!-- 프리뷰 -->
+    <div class="stage">
+      <div class="frame-bg">
+        <div class="shot">
+          <div class="shot-bar">
+            <span class="tl-light" style="background:#ff5f57"></span>
+            <span class="tl-light" style="background:#febc2e"></span>
+            <span class="tl-light" style="background:#28c840"></span>
+          </div>
+          <div class="shot-body">
+            <span class="code-line"><span class="c-kw">function</span> <span class="c-fn">validate</span>(form) {</span>
+            <span class="code-line">  <span class="c-kw">const</span> email = form.<span class="c-fn">get</span>(<span class="c-str">'email'</span>)</span>
+            <span class="code-line">  <span class="c-kw">if</span> (!<span class="c-fn">isValid</span>(email)) {</span>
+            <span class="code-line">    <span class="c-kw">return</span> { ok: <span class="c-kw">false</span> }</span>
+            <span class="code-line">  }<span class="c-mut">  // ← 클릭 지점 자동 줌</span></span>
+            <span class="code-line">  <span class="c-kw">return</span> { ok: <span class="c-kw">true</span> }</span>
+            <span class="code-line">}</span>
+          </div>
+          <div class="ripple"></div>
+          <div class="cursor">▲</div>
+          <div class="zoom-tag">🔍 2.0x</div>
+          <div class="badges">
+            <span class="badge">1440×900</span>
+            <span class="badge">feat/login-refactor @ 61e6fd6</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우측 설정 패널 -->
+    <aside class="panel">
+
+      <!-- ① 배경 -->
+      <div class="section">
+        <div class="section-title">배경</div>
+        <div class="control">
+          <div class="control-label"><span>그라디언트 · 단색</span></div>
+          <div class="swatches">
+            <span class="swatch is-active" style="background:linear-gradient(145deg,#2b2b30,#161618)" title="슬레이트"></span>
+            <span class="swatch" style="background:linear-gradient(145deg,#3a3a42,#202024)" title="그래파이트"></span>
+            <span class="swatch" style="background:linear-gradient(145deg,#2e2a44,#191826)" title="인디고"></span>
+            <span class="swatch" style="background:linear-gradient(145deg,#1f3a3a,#12201f)" title="틸"></span>
+            <span class="swatch" style="background:linear-gradient(145deg,#3a2a3a,#1d1620)" title="플럼"></span>
+            <span class="swatch solid" title="단색">색</span>
+          </div>
+        </div>
+        <div class="control">
+          <div class="control-label"><span>월페이퍼 · 이미지</span><span class="tag-open">검토 D2</span></div>
+          <div class="swatches">
+            <span class="swatch ghost" title="모델에 없음 — 도입 미정">＋</span>
+            <span class="swatch ghost" title="모델에 없음 — 도입 미정">🖼</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② 블러 -->
+      <div class="section">
+        <div class="section-title">블러 <span class="tag-open">검토 D2</span></div>
+        <div class="control">
+          <div class="control-label"><span>배경 블러</span><span class="control-value" style="color:var(--text-3)">모델 없음</span></div>
+          <input type="range" min="0" max="100" value="0" disabled />
+        </div>
+      </div>
+
+      <!-- ③ 프레임(패딩·라운딩·섀도) -->
+      <div class="section">
+        <div class="section-title">프레임</div>
+        <div class="control">
+          <div class="control-label"><span>패딩</span><span class="control-value">8%</span></div>
+          <input type="range" min="0" max="40" value="8" />
+        </div>
+        <div class="control">
+          <div class="control-label"><span>라운딩</span><span class="control-value">12px</span></div>
+          <input type="range" min="0" max="32" value="12" />
+        </div>
+        <div class="row-check"><span>드롭 섀도</span><span class="switch on"><i></i></span></div>
+      </div>
+
+      <!-- ④ 커서 (티켓 목록 누락 — 유지 권장, 검토 D4) -->
+      <div class="section">
+        <div class="section-title">커서 <span class="tag-open">검토 D4</span></div>
+        <div class="control">
+          <div class="control-label"><span>크기</span></div>
+          <div class="seg">
+            <button class="mono is-active">1x</button>
+            <button class="mono">1.5x</button>
+            <button class="mono">2x</button>
+          </div>
+        </div>
+        <div class="control">
+          <div class="control-label"><span>스무딩</span></div>
+          <div class="seg">
+            <button>끔</button>
+            <button class="is-active">약</button>
+            <button>강</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ⑤ 오버레이 배지 · 키 입력 -->
+      <div class="section">
+        <div class="section-title">오버레이 배지 · 키 입력</div>
+        <div class="row-check"><span>뷰포트 크기 배지</span><span class="switch on"><i></i></span></div>
+        <div class="control">
+          <div class="control-label"><span>맥락 (브랜치/커밋)</span></div>
+          <input class="text-in" type="text" value="feat/login-refactor @ 61e6fd6" placeholder="예: feat/v2-overlay @ 61e6fd6" />
+        </div>
+        <div class="row-check"><span>키 입력 오버레이</span><span class="switch on"><i></i></span></div>
+      </div>
+
+      <!-- ⑥ 익스포트 (동선은 검토 D3 — 여기 유지 vs 상단 바 primary) -->
+      <div class="section">
+        <div class="section-title">익스포트 <span class="tag-open">동선 D3</span></div>
+        <div class="seg" style="width:100%">
+          <button class="mono is-active" style="flex:1">MP4</button>
+          <button class="mono" style="flex:1">GIF</button>
+        </div>
+        <div class="preset-line"><span>프리셋</span><span class="mono">GitHub · ≤100MB / 1080p60</span></div>
+      </div>
+
+      <div class="meta-dl">
+        <div><b>자동 줌</b> · 3개 구간 (클릭에서 자동 생성)</div>
+        <div><b>이벤트 트랙</b> · 214개 (events.json 분리)</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ── 하단 타임라인 ── -->
+  <div class="timeline">
+    <div class="transport">
+      <button class="tbtn">◀|</button>
+      <button class="tbtn play">▶</button>
+      <button class="tbtn">|▶</button>
+      <span class="timecode">00:04 <span class="tot">/ 00:41</span></span>
+      <span class="transport-spacer"></span>
+      <span class="lane-hint">줌 구간을 끌어 이동 · 가장자리로 길이 조절 · 양끝 앰버 핸들로 트리밍</span>
+    </div>
+
+    <div class="lanes">
+      <div class="lane-tags"><span>클립</span></div>
+
+      <!-- 클립 트랙: 필름스트립 + 트림 딤 + 앰버 트림 핸들 -->
+      <div class="lane lane-clip">
+        <div class="film"></div>
+        <div class="trim-dim" style="left:0; width:6%"></div>
+        <div class="trim-dim" style="right:0; width:9%"></div>
+        <div class="trim-handle" style="left:6%"></div>
+        <div class="trim-handle" style="right:9%"></div>
+      </div>
+
+      <div class="lane-tags"><span>줌 구간</span></div>
+
+      <!-- 줌 구간 트랙: 회록색 세그먼트, 하나 선택(grass 아웃라인) -->
+      <div class="lane lane-zoom">
+        <div class="zoom-seg is-selected" style="left:14%; width:20%">
+          <span class="edge l"></span><span class="label">2.4s</span><span class="edge r"></span>
+        </div>
+        <div class="zoom-seg" style="left:44%; width:15%">
+          <span class="edge l"></span><span class="label">1.8s</span><span class="edge r"></span>
+        </div>
+        <div class="zoom-seg" style="left:70%; width:18%">
+          <span class="edge l"></span><span class="label">2.1s</span><span class="edge r"></span>
+        </div>
+      </div>
+
+      <!-- 재생 헤드 (양 레인 관통) -->
+      <div class="playhead" style="left:22%"></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

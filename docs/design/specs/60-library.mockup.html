@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>라이브러리 창 — mockup (#60)</title>
+<style>
+  :root {
+    --bg: #0c140a;
+    --surface: #131d10;
+    --surface-2: #1a2716;
+    --surface-3: #22331d;
+    --border: rgba(180,230,160,0.10);
+    --border-strong: rgba(180,230,160,0.18);
+    --text-1: #f2f6ee;
+    --text-2: #a7bd9c;
+    --text-3: #6f8465;
+    --grass: #4cc93f;
+    --grass-hover: #5cd94e;
+    --grass-ink: #0a1f0c;
+    --rec: #ff4b4b;
+    --rec-hover: #ff6161;
+    --radius-s: 8px;
+    --radius-m: 12px;
+    --radius-l: 16px;
+    --radius-pill: 999px;
+    --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    --font-display: 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-1);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    padding: 28px;
+  }
+  .caption {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 34px 0 10px;
+  }
+  .caption:first-child { margin-top: 0; }
+
+  /* ---- 창 셸 ---- */
+  .win {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-l);
+    overflow: hidden;
+    max-width: 860px;
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .traffic { display: flex; gap: 8px; }
+  .traffic i { width: 12px; height: 12px; border-radius: 50%; display: block; background: var(--surface-3); }
+  .win-title {
+    font-family: var(--font-display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .toolbar { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+  .search {
+    display: flex; align-items: center; gap: 7px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 6px 13px;
+    color: var(--text-3);
+    font-size: 13px;
+    min-width: 190px;
+  }
+  .search input {
+    background: transparent; border: 0; outline: 0;
+    color: var(--text-1); font-family: var(--font-ui); font-size: 13px; width: 100%;
+  }
+  .search input::placeholder { color: var(--text-3); }
+
+  .sort {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    color: var(--text-2);
+    font-size: 13px; font-family: var(--font-ui);
+    padding: 6px 12px;
+  }
+  /* 뷰 토글(그리드/리스트) — 열린 결정 1 */
+  .viewtoggle { display: flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 3px; }
+  .viewtoggle button {
+    border: 0; background: transparent; color: var(--text-3);
+    font-size: 13px; padding: 4px 11px; border-radius: var(--radius-pill); cursor: pointer;
+  }
+  .viewtoggle button.is-active { background: var(--grass); color: var(--grass-ink); font-weight: 600; }
+
+  /* ---- 그리드 ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    padding: 20px;
+  }
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-l);
+    overflow: hidden;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .card:hover { background: var(--surface-3); border-color: var(--border-strong); }
+  .thumb {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--surface-2);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  /* 가짜 스크린샷 그라디언트 없이 플랫 면 + 코드톤 라인 */
+  .thumb .frame {
+    position: absolute; inset: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-s);
+    background: var(--bg);
+    padding: 9px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .thumb .frame span { height: 5px; border-radius: 3px; background: var(--surface-3); }
+  .thumb .frame span:nth-child(1) { width: 55%; }
+  .thumb .frame span:nth-child(2) { width: 80%; }
+  .thumb .frame span:nth-child(3) { width: 40%; background: rgba(76,201,63,0.35); }
+  .thumb-fallback { font-size: 30px; opacity: 0.5; }
+
+  .dur-badge {
+    position: absolute; right: 8px; bottom: 8px;
+    background: rgba(12,20,10,0.78);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: var(--radius-pill);
+  }
+  .card-body { padding: 11px 13px 13px; }
+  .card-name { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-1); }
+  .card-meta {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+  .card-meta b { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 400; }
+
+  /* 오버플로 ⋯ */
+  .more {
+    position: absolute; top: 8px; right: 8px;
+    width: 26px; height: 26px;
+    border-radius: var(--radius-pill);
+    background: rgba(12,20,10,0.72);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; line-height: 1;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .card:hover .more { opacity: 1; }
+
+  /* 카드 위 액션 메뉴(정적으로 하나만 펼쳐 보여줌) */
+  .menu {
+    position: absolute; top: 40px; right: 8px; z-index: 5;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-m);
+    padding: 5px;
+    min-width: 168px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  }
+  .menu button {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    background: transparent; border: 0; cursor: pointer;
+    color: var(--text-1); font-family: var(--font-ui); font-size: 13px;
+    text-align: left; padding: 7px 9px; border-radius: var(--radius-s);
+  }
+  .menu button:hover { background: var(--surface-3); }
+  .menu button.danger { color: var(--rec); }
+  .menu .sep { height: 1px; background: var(--border); margin: 4px 2px; }
+
+  /* ---- 빈 상태 ---- */
+  .empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center;
+    padding: 72px 24px 84px;
+    gap: 6px;
+  }
+  .mascot {
+    width: 108px; height: 108px; margin-bottom: 14px;
+  }
+  .empty h2 {
+    font-family: var(--font-display);
+    font-size: 21px; font-weight: 600; margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .empty p { color: var(--text-2); font-size: 14px; max-width: 380px; margin: 4px 0 0; line-height: 1.55; }
+  kbd {
+    font-family: var(--font-mono); font-size: 12px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: var(--radius-s); padding: 1px 6px; color: var(--text-1);
+  }
+  .empty .cta {
+    margin-top: 20px;
+    background: var(--grass); color: var(--grass-ink);
+    font-family: var(--font-ui); font-weight: 600; font-size: 14px;
+    border: 0; border-radius: var(--radius-pill);
+    padding: 10px 22px; cursor: pointer;
+  }
+  .empty .cta:hover { background: var(--grass-hover); }
+
+  @media (max-width: 680px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .search { min-width: 120px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="caption">라이브러리 창 — 채워진 그리드 (populated)</div>
+  <div class="win">
+    <div class="titlebar">
+      <div class="traffic"><i></i><i></i><i></i></div>
+      <div class="win-title">라이브러리</div>
+      <div class="toolbar">
+        <div class="search">
+          <span aria-hidden>⌕</span>
+          <input placeholder="날짜로 검색" />
+        </div>
+        <select class="sort" aria-label="정렬">
+          <option>최신순</option>
+          <option>오래된순</option>
+          <option>길이순</option>
+        </select>
+        <div class="viewtoggle" role="group" aria-label="보기 방식">
+          <button class="is-active" aria-pressed="true">▦ 그리드</button>
+          <button aria-pressed="false">☰ 리스트</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- 액션 메뉴가 펼쳐진 카드 하나 (액션 세트 시연) -->
+      <div class="card">
+        <div class="thumb">
+          <div class="frame"><span></span><span></span><span></span></div>
+          <div class="dur-badge">01:23</div>
+        </div>
+        <div class="more" aria-hidden>⋯</div>
+        <div class="menu" role="menu">
+          <button role="menuitem">▶ 열기 (에디터)</button>
+          <button role="menuitem">📁 파일 위치 열기</button>
+          <button role="menuitem" style="color:var(--text-3)">✎ 이름 변경 <span style="margin-left:auto;font-family:var(--font-mono);font-size:10px">?v1</span></button>
+          <div class="sep"></div>
+          <button role="menuitem" class="danger">🗑 삭제</button>
+        </div>
+        <div class="card-body">
+          <div class="card-name">7. 9. 14:32</div>
+          <div class="card-meta"><b>01:23</b> · 이벤트 <b>42</b>개</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="thumb">
+          <div class="frame"><span></span><span></span><span></span></div>
+          <div class="dur-badge">00:48</div>
+        </div>
+        <div class="more" aria-hidden>⋯</div>
+        <div class="card-body">
+          <div class="card-name">7. 9. 11:07</div>
+          <div class="card-meta"><b>00:48</b> · 이벤트 <b>17</b>개</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="thumb">
+          <span class="thumb-fallback" aria-hidden>🎬</span>
+          <div class="dur-badge">02:05</div>
+        </div>
+        <div class="more" aria-hidden>⋯</div>
+        <div class="card-body">
+          <div class="card-name">7. 8. 18:20</div>
+          <div class="card-meta"><b>02:05</b> · 이벤트 <b>63</b>개</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="thumb">
+          <div class="frame"><span></span><span></span><span></span></div>
+          <div class="dur-badge">00:31</div>
+        </div>
+        <div class="more" aria-hidden>⋯</div>
+        <div class="card-body">
+          <div class="card-name">7. 8. 09:54</div>
+          <div class="card-meta"><b>00:31</b> · 이벤트 <b>9</b>개</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="thumb">
+          <div class="frame"><span></span><span></span><span></span></div>
+          <div class="dur-badge">01:47</div>
+        </div>
+        <div class="more" aria-hidden>⋯</div>
+        <div class="card-body">
+          <div class="card-name">7. 7. 16:11</div>
+          <div class="card-meta"><b>01:47</b> · 이벤트 <b>38</b>개</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="thumb">
+          <div class="frame"><span></span><span></span><span></span></div>
+          <div class="dur-badge">00:55</div>
+        </div>
+        <div class="more" aria-hidden>⋯</div>
+        <div class="card-body">
+          <div class="card-name">7. 7. 10:02</div>
+          <div class="card-meta"><b>00:55</b> · 이벤트 <b>21</b>개</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="caption">라이브러리 창 — 빈 상태 / 첫 사용 (마스코트 허용)</div>
+  <div class="win">
+    <div class="titlebar">
+      <div class="traffic"><i></i><i></i><i></i></div>
+      <div class="win-title">라이브러리</div>
+    </div>
+    <div class="empty">
+      <!-- Hoppy 마스코트 플레이스홀더 (최종 자산 별도). 연잎 위 개구리 + 재생 삼각형 배. -->
+      <svg class="mascot" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Hoppy 마스코트">
+        <ellipse cx="60" cy="98" rx="42" ry="9" fill="#22331d"/>
+        <path d="M18 96 A42 20 0 0 0 102 96 Z" fill="#1a2716"/>
+        <circle cx="60" cy="58" r="34" fill="#4cc93f"/>
+        <circle cx="46" cy="40" r="12" fill="#4cc93f"/>
+        <circle cx="74" cy="40" r="12" fill="#4cc93f"/>
+        <circle cx="46" cy="39" r="6" fill="#f2f6ee"/>
+        <circle cx="74" cy="39" r="6" fill="#f2f6ee"/>
+        <circle cx="47" cy="40" r="3" fill="#0a1f0c"/>
+        <circle cx="75" cy="40" r="3" fill="#0a1f0c"/>
+        <path d="M50 66 Q60 74 70 66" stroke="#0a1f0c" stroke-width="3" stroke-linecap="round"/>
+        <path d="M54 56 l14 8 l-14 8 Z" fill="#0a1f0c" opacity="0.85"/>
+      </svg>
+      <h2>아직 담긴 녹화가 없어요</h2>
+      <p>어디서든 <kbd>⌥⌘R</kbd> 를 누르면 첫 데모 녹화가 시작돼요.<br/>끝내면 여기 라이브러리에 썸네일로 쌓입니다.</p>
+      <button class="cta">첫 녹화 시작</button>
+    </div>
+  </div>
+
+</body>
+</html>
