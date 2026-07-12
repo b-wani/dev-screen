@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync } fro
 import { tmpdir } from 'node:os'
 import { test, expect } from '@playwright/test'
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
+import type { RecapApi } from '../src/preload'
 
 /**
  * 리스타일(#104) 후 UI/UX 회귀 테스트(#105). 스모크(부팅)는 smoke.spec.ts가 담당하고,
@@ -31,6 +32,7 @@ function makeRecordingFixture(): string {
   // 4초 픽스처 영상에 맞춘 이벤트 트랙 — 클릭 2회로 자동 줌 유도가 가능한 최소 구성.
   const eventTrack = {
     protocolVersion: 1,
+    // 임의 고정 시각(2025-07-05T10:10Z) — 목록 정렬 기준일 뿐 검증과 무관하다.
     startedAt: 1751710200000,
     durationMs: 4000,
     samples: [
@@ -98,7 +100,7 @@ test.describe.serial('리스타일 후 회귀 (#105)', () => {
   test('에디터 열기 — 저장된 녹화를 editor:open으로 열면 편집 UI가 전부 그려진다', async () => {
     const editorWindow = app.waitForEvent('window')
     await welcome.evaluate(
-      (folder) => (window as unknown as { recap: { openEditor(f: string): Promise<void> } }).recap.openEditor(folder),
+      (folder) => (window as unknown as { recap: RecapApi }).recap.openEditor(folder),
       recordingFolder
     )
     editor = await editorWindow
@@ -128,16 +130,14 @@ test.describe.serial('리스타일 후 회귀 (#105)', () => {
   })
 
   test('설정 패널 조작 — 패딩·드롭 섀도·맥락 입력이 반영되고 recipe.json으로 영속된다', async () => {
-    // 패딩 슬라이더: React가 추적하는 value를 네이티브 setter로 바꿔 input 이벤트를 쏜다.
+    // 패딩 슬라이더: 실제 포인터 클릭(트랙 중앙)으로 조작한다 — 리스타일 회귀에서
+    // 잡아야 할 클릭 가능성(z-index·pointer-events)까지 함께 검증하기 위함.
     const padding = editor.locator('.side-section', { hasText: '배경' }).locator('input[type="range"]').first()
-    await padding.evaluate((el: HTMLInputElement) => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-      setter.call(el, '0.2')
-      el.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await expect(
-      editor.locator('.control', { hasText: '패딩' }).locator('.control-value')
-    ).toHaveText('20%')
+    const paddingValue = editor.locator('.control', { hasText: '패딩' }).locator('.control-value')
+    const before = await paddingValue.textContent()
+    await padding.click() // min 0 · max 0.4 트랙의 중앙 ≈ 20%
+    await expect(paddingValue).not.toHaveText(before!)
+    await expect(paddingValue).toHaveText(/^\d+%$/)
 
     // 드롭 섀도 체크박스 토글.
     const shadow = editor.locator('.control-check', { hasText: '드롭 섀도' }).locator('input[type="checkbox"]')
