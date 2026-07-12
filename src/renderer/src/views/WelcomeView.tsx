@@ -10,10 +10,9 @@ import {
   type PermissionStatus
 } from '../../../shared/onboarding'
 import { OnboardingStepBody } from './OnboardingStepBody'
-import { HoppyMascot } from '../components/HoppyMascot'
 
 /**
- * Welcome 창의 셸(#80) — 마스코트 히어로 + 챕터 내비(사이드바) + 본문 패널 + 하단
+ * Welcome 창의 셸(#80) — 타이포 히어로 + 챕터 내비(사이드바) + 본문 패널 + 하단
  * 이전/다음으로 7단계를 오간다. 단계 전이·권한 게이팅·완료 판정은 기존 shared/onboarding
  * 순수 모듈 그대로 쓰고, 콘텐츠도 OnboardingStepBody·권한 UI를 그대로 마운트한다 —
  * 새로 짓는 건 셸(레이아웃·내비게이션)뿐이다(구 OnboardingView의 카드 셸을 대체).
@@ -86,10 +85,9 @@ export function WelcomeView(): JSX.Element {
     <div className="welcome">
       <aside className="welcome-rail">
         <div className="welcome-hero">
-          <HoppyMascot className="welcome-mascot" />
           <h1>환영해요!</h1>
           <p>
-            Hoppy가 Recap 사용법을
+            Recap 사용법을
             <br />한 번에 안내할게요.
           </p>
           <p className="welcome-progress">
@@ -206,7 +204,7 @@ function PermissionRow({
         className={`permission-status${granted ? ' is-granted' : ''}`}
         role="status"
       >
-        {granted ? '허용됨' : '허용 필요'}
+        {granted ? '✓ 허용됨' : '허용 필요'}
       </span>
       <button className="btn btn-ghost permission-allow" onClick={openSettings} disabled={granted}>
         허용

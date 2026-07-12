@@ -465,7 +465,7 @@ function welcomeWindow(): BrowserWindow | null {
 
 /**
  * Welcome(온보딩) 창을 만든다(#80). 고정 820×580 비리사이즈, 표준 타이틀바.
- * 셸(마스코트 히어로 + 챕터 내비 + 본문 패널)은 렌더러(WelcomeView)가 그리고,
+ * 셸(타이포 히어로 + 챕터 내비 + 본문 패널)은 렌더러(WelcomeView)가 그리고,
  * 완료 시(onboarding:complete IPC) 이 창을 닫는 건 registerIpc 의 핸들러가 맡는다.
  */
 function createWelcomeWindow(): WindowEntry<BrowserWindow> {
