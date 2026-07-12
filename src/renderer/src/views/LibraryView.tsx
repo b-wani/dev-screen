@@ -3,7 +3,6 @@ import type { RecordingSummary } from '../../../shared/ipc'
 import { sortRecordings, type LibrarySortKey } from '../../../shared/library-sort'
 import { filterByTitle } from '../../../shared/library-search'
 import { formatDate, formatElapsed } from '../format'
-import { HoppyMascot } from '../components/HoppyMascot'
 
 const SORT_OPTIONS: { value: LibrarySortKey; label: string }[] = [
   { value: 'newest', label: '최신순' },
@@ -100,7 +99,6 @@ export function LibraryView(): JSX.Element {
 
       {recordings.length === 0 ? (
         <div className="library-empty">
-          <HoppyMascot className="library-mascot" />
           <h2>아직 담긴 녹화가 없어요</h2>
           <p>
             어디서든 <kbd>⌥⌘R</kbd> 로 첫 녹화를 시작해보세요.

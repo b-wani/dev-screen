@@ -133,7 +133,7 @@ function drawClickHighlight(
   const radius = 8 + 44 * click.progress * map.drawScale
   ctx.beginPath()
   ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-  ctx.strokeStyle = `rgba(56, 189, 248, ${(1 - click.progress) * 0.9})`
+  ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - click.progress) * 0.9})`
   ctx.lineWidth = 3
   ctx.stroke()
 }

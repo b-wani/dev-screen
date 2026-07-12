@@ -1,36 +1,49 @@
 :root {
   color-scheme: dark;
 
-  /* Color — 초록빛 다크 캔버스 (Hoppy C-dark 토큰) */
-  --bg: #0c140a;
-  --surface: #131d10;
-  --surface-2: #1a2716;
-  --surface-3: #22331d;
-  --border: rgba(180, 230, 160, 0.1);
-  --border-strong: rgba(180, 230, 160, 0.18);
-  --text-1: #f2f6ee;
-  --text-2: #a7bd9c;
-  --text-3: #6f8465;
+  /* Color — Recap 모노크롬 캔버스 */
+  --bg: #0a0a0b;
+  --surface: #141415;
+  --surface-2: #1a1a1c;
+  --surface-3: #232326;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --text-1: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #6e6e73;
 
-  /* Grass 그린 — Primary 액센트(go·전진 신호) */
-  --grass: #4cc93f;
-  --grass-hover: #5cd94e;
-  --grass-ink: #0a1f0c;
+  /* Primary — 화이트(주요 액션) */
+  --primary: #f5f5f7;
+  --primary-hover: #e4e4e7;
+  --primary-ink: #0a0a0b;
 
   /* REC 레드 — 성역(녹화·삭제 전용) */
-  --rec: #ff4b4b;
-  --rec-hover: #ff6161;
+  --rec: #ff453a;
+  --rec-hover: #ff5a4f;
 
-  /* 타임라인 줌 구간 — 뉴트럴 회록색(그린과 충돌 회피) */
-  --zoom: #44513d;
-  --zoom-hover: #54634b;
+  /* 타임라인 줌 구간 — 뉴트럴 회색 */
+  --zoom: #55555a;
+  --zoom-hover: #6a6a70;
 
   /* 경고·트림 핸들 — 앰버(레드 아님) */
-  --warn: #ffc233;
+  --warn: #ff9f0a;
+
+  /* 선택/활성 신호 + 오버레이 딤 */
+  --selection: #f5f5f7;
+  --scrim: rgba(10, 10, 11, 0.55);
+
+  /* Shadow — 선택 글로우 + 엘리베이션 2단계 */
+  --shadow-selection-glow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 12px rgba(255, 255, 255, 0.18);
+  --shadow-1: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+  /* Motion */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-easing: ease-out;
 
   /* Typography */
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
-  --font-display: 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --text-xs: 12px;
   --text-sm: 13px;
@@ -40,9 +53,9 @@
   --text-xl: 40px;
 
   /* Radius */
-  --radius-s: 8px;
-  --radius-m: 12px;
-  --radius-l: 16px;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 12px;
   --radius-pill: 999px;
 
   /* Spacing */
@@ -78,7 +91,6 @@ body {
 }
 
 .title {
-  font-family: var(--font-display);
   font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -161,30 +173,30 @@ body {
   color: var(--text-3);
 }
 
-/* 익스포트 — 주요 액션(그린 primary·pill). */
+/* 익스포트 — 주요 액션(화이트 primary·pill). */
 .btn-export {
-  background: var(--grass);
+  background: var(--primary);
   border-color: transparent;
-  color: var(--grass-ink);
+  color: var(--primary-ink);
   border-radius: var(--radius-pill);
 }
 
 .btn-export:hover {
-  background: var(--grass-hover);
+  background: var(--primary-hover);
   filter: none;
 }
 
-/* 상단 바 익스포트 — 화면에서 가장 미는 primary 액션(그린, 굵게). */
+/* 상단 바 익스포트 — 화면에서 가장 미는 primary 액션(화이트, 굵게). */
 .btn-export-primary {
-  background: var(--grass);
+  background: var(--primary);
   border-color: transparent;
-  color: var(--grass-ink);
+  color: var(--primary-ink);
   border-radius: var(--radius-pill);
   font-weight: 600;
 }
 
 .btn-export-primary:hover {
-  background: var(--grass-hover);
+  background: var(--primary-hover);
   filter: none;
 }
 
@@ -204,7 +216,7 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-m);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-1);
 }
 
 /* 삭제 등 파괴적 액션 — 레드를 신호로만, 면적은 작게(외곽선). */
@@ -408,12 +420,13 @@ body {
   background: var(--surface-3);
 }
 
-/* 선택 상태 — 그린 강조(활성/선택 신호). */
+/* 선택 상태 — 순백 외곽선 + 글로우(선택/활성 신호). */
 .target-card.is-selected {
   background: var(--surface-3);
   border-color: transparent;
-  outline: 1px solid var(--grass);
-  outline-offset: -1px;
+  outline: 2px solid var(--selection);
+  outline-offset: -2px;
+  box-shadow: var(--shadow-selection-glow);
 }
 
 .target-card-icon {
@@ -638,8 +651,8 @@ body {
 }
 
 .bg-swatch.is-active {
-  border-color: var(--grass);
-  box-shadow: 0 0 0 1px var(--grass);
+  border-color: transparent;
+  box-shadow: var(--shadow-selection-glow);
 }
 
 /* 단색 스와치는 컬러 인풋을 덮어 클릭 시 피커를 연다. */
@@ -676,15 +689,15 @@ body {
   font-family: var(--font-ui);
 }
 
-/* 활성 선택 — 그린 primary */
+/* 활성 선택 — 화이트 primary */
 .btn-scale.is-active {
-  background: var(--grass);
+  background: var(--primary);
   border-color: transparent;
-  color: var(--grass-ink);
+  color: var(--primary-ink);
 }
 
 .btn-scale.is-active:hover {
-  background: var(--grass-hover);
+  background: var(--primary-hover);
   filter: none;
 }
 
@@ -764,12 +777,12 @@ body {
   overflow: hidden;
 }
 
-/* 진행 바 채움 — 주요 액션이므로 그린. */
+/* 진행 바 채움 — 화이트 fill. */
 .progress-fill {
   height: 100%;
-  background: var(--grass);
+  background: var(--primary);
   border-radius: var(--radius-pill);
-  transition: width 0.15s linear;
+  transition: width var(--motion-fast) var(--motion-easing);
 }
 
 .export-done {
@@ -783,13 +796,6 @@ body {
   align-items: center;
   gap: var(--space-2);
   font-size: var(--text-sm);
-}
-
-/* 익스포트 완료 순간에만 허용되는 마스코트(디자인 언어 규칙) — 작게, 텍스트 옆. */
-.export-mascot {
-  width: 22px;
-  height: 22px;
-  flex: none;
 }
 
 .export-done-size {
@@ -927,8 +933,9 @@ body {
 }
 
 .tl-seg.is-selected {
-  outline: 2px solid var(--grass);
+  outline: 2px solid var(--selection);
   outline-offset: 1px;
+  box-shadow: var(--shadow-selection-glow);
   z-index: 2;
 }
 
@@ -955,7 +962,7 @@ body {
   touch-action: none;
   background: color-mix(in srgb, var(--text-1) 22%, transparent);
   opacity: 0;
-  transition: opacity 0.12s ease;
+  transition: opacity var(--motion-fast) var(--motion-easing);
 }
 
 .tl-seg:hover .tl-seg-edge,
@@ -1076,7 +1083,6 @@ body {
 }
 
 .error h2 {
-  font-family: var(--font-display);
   color: var(--warn);
 }
 
@@ -1222,7 +1228,7 @@ body {
 }
 
 .permission-status.is-granted {
-  color: var(--grass);
+  color: var(--text-1);
 }
 
 .permission-allow {
@@ -1268,7 +1274,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-2);
 }
 
 .toolbar button,
@@ -1297,8 +1303,8 @@ body {
 }
 
 .mode-seg.is-active {
-  background: var(--grass);
-  color: var(--grass-ink);
+  background: var(--primary);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 
@@ -1347,7 +1353,7 @@ body {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-1);
 }
 
 .settings-row {
@@ -1396,7 +1402,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-2);
 }
 
 .rec-pill-stop {
@@ -1405,7 +1411,7 @@ body {
   font-size: var(--text-sm);
 }
 
-/* ── Welcome 창 셸 (#80) — 마스코트 히어로 + 챕터 내비 + 본문 패널 + 하단 바 ─── */
+/* ── Welcome 창 셸 (#80) — 타이포 히어로 + 챕터 내비 + 본문 패널 + 하단 바 ─── */
 .welcome {
   display: flex;
   height: 100vh;
@@ -1429,16 +1435,8 @@ body {
   padding: var(--space-1) var(--space-1) var(--space-4);
 }
 
-.welcome-mascot {
-  width: 104px;
-  height: 104px;
-  margin: 0 auto var(--space-3);
-  display: block;
-}
-
 .welcome-hero h1 {
   margin: 0;
-  font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.2px;
@@ -1500,7 +1498,7 @@ body {
 
 .welcome-chapter.is-done .welcome-chapter-num {
   background: transparent;
-  color: var(--grass);
+  color: var(--text-1);
   border: 1px solid var(--border-strong);
 }
 
@@ -1511,8 +1509,8 @@ body {
 }
 
 .welcome-chapter.is-active .welcome-chapter-num {
-  background: var(--grass);
-  color: var(--grass-ink);
+  background: var(--primary);
+  color: var(--primary-ink);
 }
 
 .welcome-panel {
@@ -1548,12 +1546,12 @@ body {
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--surface-3);
-  transition: width 0.12s ease, background 0.12s ease;
+  transition: width var(--motion-fast) var(--motion-easing), background var(--motion-fast) var(--motion-easing);
 }
 
 .welcome-dot.is-active {
   width: 18px;
-  background: var(--grass);
+  background: var(--primary);
 }
 
 .welcome-btns {
@@ -1566,15 +1564,15 @@ body {
 .window-picker-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(12, 20, 10, 0.55);
+  background: var(--scrim);
 }
 
 .window-picker-highlight {
   position: absolute;
-  border: 2px solid var(--grass);
+  border: 2px solid var(--selection);
   border-radius: var(--radius-s);
-  box-shadow: 0 0 24px rgba(76, 201, 63, 0.45);
-  background: rgba(76, 201, 63, 0.08);
+  box-shadow: var(--shadow-selection-glow), 0 0 24px rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .window-picker-label {
@@ -1590,7 +1588,7 @@ body {
   color: var(--text-1);
   font-size: var(--text-sm);
   border-radius: var(--radius-pill);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-1);
 }
 
 /* ── Area 선택 오버레이 (#72) — 주 디스플레이를 덮는 투명 창 ────────────────── */
@@ -1606,11 +1604,12 @@ body {
 
 .area-rect {
   position: absolute;
-  border: 2px solid var(--grass);
+  border: 2px solid var(--selection);
   border-radius: 2px;
   /* 사각형 밖 전체를 딤 처리한다 — 거대한 box-shadow 가 사각형 바깥만 덮고
-     border-box 안쪽(사각형 내부)은 그대로 투명해 딤이 걷힌 것처럼 보인다. */
-  box-shadow: 0 0 0 9999px rgba(12, 20, 10, 0.55);
+     border-box 안쪽(사각형 내부)은 그대로 투명해 딤이 걷힌 것처럼 보인다. 선택 글로우와
+     캡처 하이라이트 강조를 이어서 쌓는다. */
+  box-shadow: 0 0 0 9999px var(--scrim), var(--shadow-selection-glow), 0 0 24px rgba(255, 255, 255, 0.25);
   cursor: move;
 }
 
@@ -1646,8 +1645,8 @@ body {
   width: 10px;
   height: 10px;
   margin: -5px;
-  background: var(--grass);
-  border: 1px solid var(--grass-ink);
+  background: var(--selection);
+  border: 1px solid var(--primary-ink);
   border-radius: 2px;
 }
 
@@ -1700,15 +1699,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(12, 20, 10, 0.55);
-  transition: background-color 120ms ease-out;
+  background: var(--scrim);
+  transition: background-color var(--motion-fast) var(--motion-easing);
   cursor: pointer;
 }
 
 /* 커서가 올라간 디스플레이(=이 창)만 딤이 살짝 걷힌다. 창 경계가 곧 디스플레이 경계라
    순수 CSS :hover 로 충분하다(교차 창 커서 추적 불필요). */
 .display-overlay:hover {
-  background: rgba(12, 20, 10, 0.3);
+  background: rgba(10, 10, 11, 0.3);
 }
 
 .display-overlay-picker {
@@ -1730,7 +1729,7 @@ body {
   background: var(--surface-2);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-1);
 }
 
 .display-overlay-start {
@@ -1758,7 +1757,6 @@ body {
 
 .library-title {
   margin: 0;
-  font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: 700;
 }
@@ -1826,13 +1824,13 @@ body {
   height: 24px;
   border-radius: var(--radius-pill);
   border: none;
-  background: rgba(12, 20, 10, 0.6);
+  background: rgba(10, 10, 11, 0.6);
   color: var(--text-1);
   font-size: var(--text-base);
   line-height: 1;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.1s ease;
+  transition: opacity var(--motion-fast) var(--motion-easing);
 }
 
 .library-card:hover .library-card-menu-btn,
@@ -1858,7 +1856,7 @@ body {
   background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-s);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-1);
 }
 
 .library-card-menu-item {
@@ -1912,7 +1910,7 @@ body {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-xs);
   color: var(--text-1);
-  background: rgba(12, 20, 10, 0.7);
+  background: rgba(10, 10, 11, 0.7);
   padding: 2px var(--space-2);
   border-radius: var(--radius-pill);
 }
@@ -1961,15 +1959,8 @@ body {
   color: var(--text-2);
 }
 
-.library-mascot {
-  width: 104px;
-  height: 104px;
-  margin-bottom: var(--space-2);
-}
-
 .library-empty h2 {
   margin: 0;
-  font-family: var(--font-display);
   font-size: var(--text-lg);
   color: var(--text-1);
 }
@@ -1985,4 +1976,15 @@ body {
   padding: 2px var(--space-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-s);
+}
+
+/* ── 모션 저감 설정 대응 ──────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
