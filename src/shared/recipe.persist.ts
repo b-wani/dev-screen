@@ -119,11 +119,15 @@ function validateCursor(raw: unknown): CursorTrack {
   if (!Array.isArray(c.keyframes)) throw new RecipeParseError('recipe.cursor.keyframes 누락')
   if (!Array.isArray(c.clicks)) throw new RecipeParseError('recipe.cursor.clicks 누락')
   // v1~v3 레시피는 커서 크기·스무딩 강도가 없다 — 기본값(크기 1x·약)으로 채운다(#35).
+  // #150/#153 이전 레시피는 후편집 토글(hidden/hideWhenIdle/loopReturn)이 없다 — 기본값으로 채운다.
   return {
     keyframes: c.keyframes.map(validateCursorKeyframe),
     clicks: c.clicks.map(validateClickMark),
     size: isNum(c.size) ? c.size : CURSOR_DEFAULTS.size,
-    smoothingMs: isNum(c.smoothingMs) ? c.smoothingMs : CURSOR_DEFAULTS.smoothingMs
+    smoothingMs: isNum(c.smoothingMs) ? c.smoothingMs : CURSOR_DEFAULTS.smoothingMs,
+    hidden: typeof c.hidden === 'boolean' ? c.hidden : CURSOR_DEFAULTS.hidden,
+    hideWhenIdle: typeof c.hideWhenIdle === 'boolean' ? c.hideWhenIdle : CURSOR_DEFAULTS.hideWhenIdle,
+    loopReturn: typeof c.loopReturn === 'boolean' ? c.loopReturn : CURSOR_DEFAULTS.loopReturn
   }
 }
 

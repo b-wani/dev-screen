@@ -76,13 +76,25 @@ export interface CursorTrack {
   keyframes: CursorKeyframe[]
   /** 시간순 클릭 지점. */
   clicks: ClickMark[]
-  /** 커서 그리기 크기 배율 (1 = 기본). 사이드바에서 1x/1.5x/2x로 조절한다. */
+  /** 커서 그리기 크기 배율 (1 = 기본). 사이드바 연속 슬라이더로 0.5~2.0x 조절한다. */
   size: number
   /**
    * 스무딩 커널의 표준편차(ms). 사이드바에서 끔/약/강으로 조절한다. 0이면 스무딩하지
    * 않고 가장 가까운 원본 이벤트 위치를 그대로 쓴다. 클수록 흔들림이 더 감쇠된다.
    */
   smoothingMs: number
+  /** 커서 완전 숨김 (#153). true면 커서를 아예 그리지 않는다. 기본 false. */
+  hidden: boolean
+  /**
+   * 유휴 시 자동 숨김 (#150). true면 커서가 멈춰 있을 때 페이드아웃하고, 다시 움직이면
+   * 페이드인한다. 임계·페이드 값은 내부 고정 상수(CURSOR_DEFAULTS). 기본 false.
+   */
+  hideWhenIdle: boolean
+  /**
+   * 루프 초기위치 복귀 (#150). true면 출력 마지막 loopReturnMs 동안 커서를 시작(출력 t=0)
+   * 좌표로 보간해, 루프 GIF의 이음새를 매끈하게 한다. 기본 true.
+   */
+  loopReturn: boolean
 }
 
 /**
@@ -197,6 +209,8 @@ export interface CursorSample {
   cursor: CursorKind
   /** 커서 그리기 크기 배율 (레시피의 cursor.size를 그대로 옮긴다). */
   size: number
+  /** 커서 불투명도 0→1 (유휴 자동 숨김 페이드). 1 = 완전 불투명. 그리기 층이 globalAlpha로 쓴다. */
+  opacity: number
 }
 
 /** 시각 t의 활성 클릭 하이라이트 — 미리보기 층이 리플/눌림으로 그린다. */
@@ -369,10 +383,28 @@ export const MOTION_BLUR_DEFAULTS = {
  * 커서 튜닝 수치 (SPEC "커서 렌더링"). 규칙만 테스트로 고정하고 값은 실험으로 정한다.
  */
 export const CURSOR_DEFAULTS = {
-  /** 커서 크기 배율 기본값 (1 = 원본). */
+  /** 커서 크기 배율 기본값 (1 = 원본). 슬라이더 Reset도 이 값으로 돌린다. */
   size: 1,
-  /** 선택 가능한 커서 크기 배율 (사이드바 1x/1.5x/2x). */
-  sizes: [1, 1.5, 2] as readonly number[],
+  /** 크기 슬라이더 범위·간격 (#150: 0.5~2.0x, step 0.1x). */
+  sizeMin: 0.5,
+  sizeMax: 2,
+  sizeStep: 0.1,
+  /** 커서 완전 숨김 기본값 (#153, OFF). */
+  hidden: false,
+  /** 유휴 자동 숨김 기본값 (#150, OFF). */
+  hideWhenIdle: false,
+  /** 루프 초기위치 복귀 기본값 (#150, ON — recap 차별화 축=루프 GIF). */
+  loopReturn: true,
+  /** 유휴 판정 임계(ms) — 이 시간 이상 정지하면 페이드아웃을 시작한다. */
+  idleHideMs: 1500,
+  /** 정지 판정 이동량(원본 px) — 마지막 이동 지점에서 이보다 덜 움직이면 정지로 본다. */
+  idleMovePx: 2,
+  /** 유휴 페이드아웃 길이(ms) — ease-out으로 커서가 사라진다. */
+  idleFadeOutMs: 400,
+  /** 유휴 페이드인 길이(ms) — 다시 움직이면 빠르게 나타난다(반응성). */
+  idleFadeInMs: 150,
+  /** 루프 복귀 창(ms) — 출력 마지막 이 시간 동안 시작 좌표로 보간한다. */
+  loopReturnMs: 800,
   /**
    * 스무딩 커널의 표준편차(ms). 각 이벤트에 시간 거리 기반 가우시안 가중치를 주어
    * 평균 내므로, 이 값이 클수록 흔들림이 더 강하게 감쇠된다(SPEC: 스무딩 끔/약/강).
@@ -505,7 +537,10 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
     keyframes,
     clicks: clicks.map((c) => ({ t: c.t, x: c.x, y: c.y })),
     size: CURSOR_DEFAULTS.size,
-    smoothingMs: CURSOR_DEFAULTS.smoothingMs
+    smoothingMs: CURSOR_DEFAULTS.smoothingMs,
+    hidden: CURSOR_DEFAULTS.hidden,
+    hideWhenIdle: CURSOR_DEFAULTS.hideWhenIdle,
+    loopReturn: CURSOR_DEFAULTS.loopReturn
   }
 
   return {
@@ -664,7 +699,7 @@ export function sampleFrame(recipe: RenderRecipe, t: number): FrameSample {
   }
   return {
     camera: sampleRecipe(recipe, t),
-    cursor: sampleCursor(recipe.cursor, t),
+    cursor: sampleCursor(recipe.cursor, t, recipe.trim),
     click: sampleClick(recipe.cursor, t)
   }
 }
@@ -718,20 +753,51 @@ function sampleKeyOverlay(recipe: RenderRecipe, t: number): KeyOverlayState | nu
 }
 
 /**
- * 스무딩된 커서: 이벤트 좌표를 시간 거리 기반 가우시안 가중 평균해, 원본의 흔들림을 감쇠한다.
- * 대칭 커널이라 위치가 뒤처지지 않고, 인접한 반대 방향 지터가 서로 상쇄된다.
+ * 시각 t의 커서 상태 — 스무딩 위치 + 크기 + 불투명도. 4종 후편집 컨트롤을 여기서 반영한다:
+ * 완전 숨김(hidden→null), 유휴 자동 숨김(hideWhenIdle→opacity 페이드), 루프 초기위치
+ * 복귀(loopReturn→마지막 loopReturnMs 동안 시작 좌표로 spring 보간). 크기(size)는 그대로 옮긴다.
  */
-function sampleCursor(track: CursorTrack, t: number): CursorSample | null {
+function sampleCursor(track: CursorTrack, t: number, trim: Trim): CursorSample | null {
+  // 완전 숨김: 커서를 아예 그리지 않는다.
+  if (track.hidden) return null
   const kf = track.keyframes
   if (kf.length === 0) return null
 
-  const sigma = track.smoothingMs
-  // 스무딩 끔(sigma<=0): 평균 없이 가장 가까운 원본 이벤트 위치를 그대로 쓴다.
-  if (sigma <= 0) {
-    const near = nearestKeyframe(kf, t)
-    return { x: near.x, y: near.y, cursor: cursorKindAt(kf, t), size: track.size }
+  let pos = smoothedCursorPos(kf, track.smoothingMs, t)
+  let opacity = track.hideWhenIdle ? idleCursorOpacity(kf, t) : 1
+
+  // 루프 초기위치 복귀 — 출력 마지막 loopReturnMs 동안 시작(출력 t=0) 좌표로 spring 보간한다.
+  // 출력 길이가 창보다 짧으면(복귀 시작이 트림 시작 이전) 복귀 이동이 무의미하므로 건너뛴다.
+  if (track.loopReturn) {
+    const returnStart = trim.endMs - CURSOR_DEFAULTS.loopReturnMs
+    if (returnStart > trim.startMs && t >= returnStart && t <= trim.endMs) {
+      const p = clamp((t - returnStart) / CURSOR_DEFAULTS.loopReturnMs, 0, 1)
+      const e = springEase(p)
+      const anchor = smoothedCursorPos(kf, track.smoothingMs, returnStart)
+      const start = smoothedCursorPos(kf, track.smoothingMs, trim.startMs)
+      pos = { x: anchor.x + (start.x - anchor.x) * e, y: anchor.y + (start.y - anchor.y) * e }
+      // 유휴 숨김으로 끝에서 숨은 상태면 복귀 시작과 함께 페이드인한다.
+      if (track.hideWhenIdle) {
+        const base = idleCursorOpacity(kf, returnStart)
+        const inP = clamp((t - returnStart) / CURSOR_DEFAULTS.idleFadeInMs, 0, 1)
+        opacity = base + (1 - base) * inP
+      }
+    }
   }
 
+  return { x: pos.x, y: pos.y, cursor: cursorKindAt(kf, t), size: track.size, opacity }
+}
+
+/**
+ * 스무딩된 커서 위치(원본 px): 이벤트 좌표를 시간 거리 기반 가우시안 가중 평균해 흔들림을
+ * 감쇠한다. 대칭 커널이라 위치가 뒤처지지 않고 인접한 반대 방향 지터가 서로 상쇄된다.
+ * sigma<=0이거나 가중치가 언더플로하면 가장 가까운 원본 이벤트 위치를 그대로 쓴다.
+ */
+function smoothedCursorPos(kf: CursorKeyframe[], sigma: number, t: number): { x: number; y: number } {
+  if (sigma <= 0) {
+    const near = nearestKeyframe(kf, t)
+    return { x: near.x, y: near.y }
+  }
   let sumW = 0
   let sumX = 0
   let sumY = 0
@@ -742,13 +808,57 @@ function sampleCursor(track: CursorTrack, t: number): CursorSample | null {
     sumX += w * k.x
     sumY += w * k.y
   }
-
-  // t가 모든 이벤트에서 극단적으로 멀어 가중치가 언더플로하면 가장 가까운 키프레임으로 대체.
   if (sumW === 0) {
     const near = nearestKeyframe(kf, t)
-    return { x: near.x, y: near.y, cursor: cursorKindAt(kf, t), size: track.size }
+    return { x: near.x, y: near.y }
   }
-  return { x: sumX / sumW, y: sumY / sumW, cursor: cursorKindAt(kf, t), size: track.size }
+  return { x: sumX / sumW, y: sumY / sumW }
+}
+
+/**
+ * 시각 t의 유휴 자동 숨김 불투명도(0→1). 커서가 idleHideMs 이상 정지하면 idleFadeOutMs 동안
+ * ease-out으로 사라지고, 다시 움직이면 idleFadeInMs 동안 (숨었던 만큼에서) 나타난다. 연속
+ * 이동 중에는 직전 이동이 최근이라 늘 1로 유지된다.
+ */
+function idleCursorOpacity(kf: CursorKeyframe[], t: number): number {
+  const { last, prev } = cursorMoveTimes(kf, t)
+  const idle = t - last
+  if (idle >= CURSOR_DEFAULTS.idleHideMs) return idleFadeOpacity(idle)
+  // 방금 이동한 구간 — 이동 직전 불투명도(숨었던 정도)에서 페이드인한다.
+  if (idle >= CURSOR_DEFAULTS.idleFadeInMs) return 1
+  const base = idleFadeOpacity(last - prev)
+  return base + (1 - base) * (idle / CURSOR_DEFAULTS.idleFadeInMs)
+}
+
+/** 정지 지속시간(ms)에 대한 페이드아웃 불투명도. 임계 전 1, 창 안은 ease-out으로 1→0, 이후 0. */
+function idleFadeOpacity(idleMs: number): number {
+  if (idleMs < CURSOR_DEFAULTS.idleHideMs) return 1
+  const f = (idleMs - CURSOR_DEFAULTS.idleHideMs) / CURSOR_DEFAULTS.idleFadeOutMs
+  if (f >= 1) return 0
+  // ease-out: 초반 빠르게 흐려지고 끝에서 완만히 0에 안착.
+  return (1 - f) ** 3
+}
+
+/**
+ * t 이하에서 커서가 마지막으로 idleMovePx 넘게 이동한 시각(last)과 그 직전 이동 시각(prev).
+ * 마지막 이동 지점을 앵커로 두고, 앵커에서 idleMovePx 넘게 벗어나면 이동으로 보고 앵커를
+ * 옮긴다 — 정지 중 서브픽셀 지터는 이동으로 치지 않는다. 이동이 없으면 첫 키프레임 시각.
+ */
+function cursorMoveTimes(kf: CursorKeyframe[], t: number): { last: number; prev: number } {
+  let ax = kf[0].x
+  let ay = kf[0].y
+  let last = kf[0].t
+  let prev = kf[0].t
+  for (const k of kf) {
+    if (k.t > t) break
+    if (Math.hypot(k.x - ax, k.y - ay) > CURSOR_DEFAULTS.idleMovePx) {
+      prev = last
+      last = k.t
+      ax = k.x
+      ay = k.y
+    }
+  }
+  return { last, prev }
 }
 
 /** 시각 t의 활성 클릭 하이라이트. clickHighlightMs 창 안에 든 가장 최근 클릭을 고른다. */

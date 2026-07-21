@@ -186,21 +186,42 @@ export function Sidebar({
       {/* ② 커서 */}
       <fieldset className="side-section">
         <legend className="side-section-title">커서</legend>
-        <div className="control">
-          <span>크기</span>
-          <div className="scale-buttons">
-            {CURSOR_DEFAULTS.sizes.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`btn btn-scale${recipe.cursor.size === s ? ' is-active' : ''}`}
-                onClick={() => update((r) => ({ ...r, cursor: { ...r.cursor, size: s } }))}
-              >
-                {s}x
-              </button>
-            ))}
+        <label className="control control-check">
+          <input
+            type="checkbox"
+            checked={recipe.cursor.hidden}
+            onChange={(e) => update((r) => ({ ...r, cursor: { ...r.cursor, hidden: e.target.checked } }))}
+          />
+          <span>커서 숨김</span>
+        </label>
+        <label className="control">
+          <span className="control-row">
+            <span>크기</span>
+            <span className="control-value">{recipe.cursor.size.toFixed(1)}x</span>
+          </span>
+          <div className="control-row">
+            <input
+              type="range"
+              min={CURSOR_DEFAULTS.sizeMin}
+              max={CURSOR_DEFAULTS.sizeMax}
+              step={CURSOR_DEFAULTS.sizeStep}
+              value={recipe.cursor.size}
+              disabled={recipe.cursor.hidden}
+              onChange={(e) =>
+                update((r) => ({ ...r, cursor: { ...r.cursor, size: Number(e.target.value) } }))
+              }
+            />
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() =>
+                update((r) => ({ ...r, cursor: { ...r.cursor, size: CURSOR_DEFAULTS.size } }))
+              }
+            >
+              Reset
+            </button>
           </div>
-        </div>
+        </label>
         <div className="control">
           <span>스무딩</span>
           <div className="scale-buttons">
@@ -218,6 +239,26 @@ export function Sidebar({
             ))}
           </div>
         </div>
+        <label className="control control-check">
+          <input
+            type="checkbox"
+            checked={recipe.cursor.hideWhenIdle}
+            onChange={(e) =>
+              update((r) => ({ ...r, cursor: { ...r.cursor, hideWhenIdle: e.target.checked } }))
+            }
+          />
+          <span>유휴 시 자동 숨김</span>
+        </label>
+        <label className="control control-check">
+          <input
+            type="checkbox"
+            checked={recipe.cursor.loopReturn}
+            onChange={(e) =>
+              update((r) => ({ ...r, cursor: { ...r.cursor, loopReturn: e.target.checked } }))
+            }
+          />
+          <span>루프 초기위치 복귀</span>
+        </label>
       </fieldset>
 
       {/* ③ 배지 · 키 입력 오버레이 */}
