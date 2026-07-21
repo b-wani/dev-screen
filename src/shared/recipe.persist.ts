@@ -8,10 +8,11 @@
 
 import type { CursorKind } from './event-track'
 import type { KeySample } from './event-track'
-import { CURSOR_DEFAULTS, GRADIENT_PRESETS } from './recipe'
+import { CURSOR_DEFAULTS, GRADIENT_PRESETS, nextClipId } from './recipe'
 import type {
   BackgroundStyle,
   BadgeConfig,
+  Clip,
   ClickMark,
   CursorKeyframe,
   CursorTrack,
@@ -75,6 +76,7 @@ function validateRecipe(raw: unknown): RenderRecipe {
   if (!isNum(r.durationMs)) throw new RecipeParseError('recipe.durationMs 누락')
   if (!Array.isArray(r.zoomSegments)) throw new RecipeParseError('recipe.zoomSegments 누락')
 
+  const trim = validateTrim(r.trim)
   return {
     source: { width: source.width, height: source.height },
     // 논리 뷰포트(포인트)는 선택적 — v1 저장본엔 없다. 있으면 검증해 보존한다.
@@ -84,7 +86,9 @@ function validateRecipe(raw: unknown): RenderRecipe {
     // v1 레시피는 구간 배율이 없다 — 저장된 전역 배율로 채운다(스토리 25).
     zoomSegments: r.zoomSegments.map((s) => validateSegment(s, r.zoomScale as number)),
     cursor: validateCursor(r.cursor),
-    trim: validateTrim(r.trim),
+    trim,
+    // 구버전 레시피엔 clips가 없다 — 검증된 trim에서 클립 1개를 합성한다(마이그레이션 #157).
+    clips: validateClips(r.clips, trim),
     background: validateBackground(r.background),
     badge: validateBadge(r.badge),
     keystrokes: validateKeystrokes(r.keystrokes)
@@ -160,6 +164,41 @@ function validateTrim(raw: unknown): Trim {
   const t = asObject(raw, 'recipe.trim')
   if (!isNum(t.startMs) || !isNum(t.endMs)) throw new RecipeParseError('recipe.trim: startMs/endMs 누락')
   return { startMs: t.startMs, endMs: t.endMs }
+}
+
+/**
+ * 클립 시퀀스를 검증한다(#157). clips가 없으면(구버전) trim에서 클립 1개를 합성해 조용히
+ * 상향한다 — persist의 graceful 로드 철학. clips가 있으면 각 클립을 검증하고 시퀀스 불변식
+ * (source 오름차순·비겹침)까지 확인한다. 손상된 시퀀스는 조용히 통과시키지 않고 던진다.
+ */
+function validateClips(raw: unknown, trim: Trim): Clip[] {
+  if (raw === undefined || raw === null) {
+    // 구버전: trim 창을 덮는 클립 1개로 합성.
+    return [{ id: nextClipId([]), sourceStartMs: trim.startMs, sourceEndMs: trim.endMs, speed: 1 }]
+  }
+  if (!Array.isArray(raw)) throw new RecipeParseError('recipe.clips: 배열이 아님')
+  if (raw.length === 0) throw new RecipeParseError('recipe.clips: 클립이 최소 1개 필요')
+  const clips = raw.map(validateClip)
+  // 시퀀스 불변식: source 오름차순·비겹침 (clips[i].sourceStartMs >= clips[i-1].sourceEndMs).
+  for (let i = 1; i < clips.length; i++) {
+    if (clips[i].sourceStartMs < clips[i - 1].sourceEndMs) {
+      throw new RecipeParseError('recipe.clips: source 오름차순·비겹침 불변식 위반')
+    }
+  }
+  return clips
+}
+
+function validateClip(raw: unknown): Clip {
+  const c = asObject(raw, 'clip')
+  if (typeof c.id !== 'string' || c.id.length === 0) throw new RecipeParseError('clip: id 누락')
+  if (!isNum(c.sourceStartMs) || !isNum(c.sourceEndMs)) {
+    throw new RecipeParseError('clip: sourceStartMs/sourceEndMs 누락')
+  }
+  if (c.sourceStartMs >= c.sourceEndMs) {
+    throw new RecipeParseError('clip: sourceStartMs < sourceEndMs 이어야 함')
+  }
+  if (!isNum(c.speed) || c.speed <= 0) throw new RecipeParseError('clip: speed는 양수여야 함')
+  return { id: c.id, sourceStartMs: c.sourceStartMs, sourceEndMs: c.sourceEndMs, speed: c.speed }
 }
 
 /**

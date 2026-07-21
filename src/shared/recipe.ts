@@ -106,6 +106,24 @@ export interface Trim {
   endMs: number
 }
 
+/**
+ * 클립 — 최종 영상으로 남기는 원본의 한 조각. `[sourceStartMs, sourceEndMs)` source 구간과
+ * 재생 속도 배율(speed)을 가진다. 클립들은 source 오름차순·비겹침으로 늘어서 클립 시퀀스를
+ * 이루며, 그 사이 간극이 컷(제거된 구간)이다. 출력 타임라인은 이 클립들을 이어 붙인 것이다.
+ *
+ * (EXPAND 단계 #157: `trim`과 병존한다 — trim 제거·컷 UI는 후속 #164.)
+ */
+export interface Clip {
+  /** 안정적 식별자(UI 선택·편집 대상). split이 index를 밀어내도 클립을 추적한다. */
+  id: string
+  /** 클립이 남기는 source 구간의 시작(ms). */
+  sourceStartMs: number
+  /** 클립이 남기는 source 구간의 끝(ms). */
+  sourceEndMs: number
+  /** 재생 배율(1 = 원속). 2면 이 구간을 2배 빠르게 재생(출력 길이 절반). */
+  speed: number
+}
+
 /** 배경 채우기 종류 — 단색 또는 그라디언트. 이미지/월페이퍼는 범위 밖. */
 export type BackgroundKind = 'color' | 'gradient'
 
@@ -183,6 +201,12 @@ export interface RenderRecipe {
   cursor: CursorTrack
   /** 최종 영상으로 남길 원본 시간 범위. 기본은 전 구간 [0, durationMs]. */
   trim: Trim
+  /**
+   * 클립 시퀀스 — source 오름차순·비겹침으로 늘어선 클립들. 출력 타임라인은 이들을 이어
+   * 붙인 것이다. 신규 유도 레시피는 전체를 덮는 클립 1개(= trim 창)를 가진다. output↔source
+   * 매핑(outputDurationMs·sourceAtOutput)의 입력이다. (EXPAND #157: trim과 병존.)
+   */
+  clips: Clip[]
   /** 배경/패딩 스타일. */
   background: BackgroundStyle
   /** 뷰포트 크기 배지 설정. */
@@ -554,6 +578,8 @@ export function deriveRecipe(track: EventTrack, config: DeriveConfig): RenderRec
     zoomSegments,
     cursor,
     trim: { startMs: 0, endMs: track.durationMs },
+    // 클립 시퀀스: 갓 유도한 레시피는 전체(= trim 창)를 덮는 클립 1개다.
+    clips: [{ id: nextClipId([]), sourceStartMs: 0, sourceEndMs: track.durationMs, speed: 1 }],
     background: {
       type: COMPOSITE_DEFAULTS.backgroundType,
       color: COMPOSITE_DEFAULTS.backgroundColor,
@@ -730,6 +756,64 @@ export function sampleComposition(recipe: RenderRecipe, t: number, fps?: number)
     },
     keyOverlay: sampleKeyOverlay(recipe, t)
   }
+}
+
+/**
+ * output↔source 매핑 계층 (결정 문서 #6·좌표계 정의) — source-시간 core 위에 얹는 얇은 층.
+ *
+ * 클립 시퀀스는 source 오름차순·비겹침이라, 출력 시간을 클립 순서대로 소비하면 source 시간이
+ * 단조 증가하는 piecewise-linear 매핑이 된다. 컷(클립 간극)은 자연히 건너뛰고, speed는 자연히
+ * 압축된다. core(sampleComposition(recipe, sourceT))는 이 값을 몰라도 되며 불변이다.
+ */
+
+/** 출력 총길이(ms) = Σ (클립 source 길이 / speed). 스크러버·익스포트 길이의 기준. */
+export function outputDurationMs(recipe: RenderRecipe): number {
+  return recipe.clips.reduce((sum, c) => sum + (c.sourceEndMs - c.sourceStartMs) / c.speed, 0)
+}
+
+/**
+ * 출력 시간 → source 시간. 클립을 순서대로 누적 소비해 어느 클립인지 찾고, 그 안에서 speed로
+ * source 시간을 되돌린다. 범위 밖은 양끝으로 클램핑한다(음수 → 첫 클립 시작, 초과 → 마지막
+ * 클립 끝). 컷 경계에서는 source가 점프할 수 있다(결정 #9).
+ */
+export function sourceAtOutput(recipe: RenderRecipe, outputMs: number): number {
+  const clips = recipe.clips
+  const t = Math.max(0, outputMs)
+  let acc = 0
+  for (const clip of clips) {
+    const clipOutLen = (clip.sourceEndMs - clip.sourceStartMs) / clip.speed
+    if (t <= acc + clipOutLen) {
+      return clip.sourceStartMs + (t - acc) * clip.speed
+    }
+    acc += clipOutLen
+  }
+  return clips[clips.length - 1].sourceEndMs
+}
+
+/**
+ * 출력 시간에서의 합성 파라미터 — 출력 시간을 source 시간으로 되돌려 core 샘플러를 호출한다.
+ * 플레이어(스크러버)·익스포트가 출력 타임라인을 걸 때 쓴다. fps는 core로 그대로 전달된다.
+ */
+export function sampleCompositionAtOutput(
+  recipe: RenderRecipe,
+  outputMs: number,
+  fps?: number
+): FrameComposition {
+  return sampleComposition(recipe, sourceAtOutput(recipe, outputMs), fps)
+}
+
+/**
+ * 결정적 클립 id 생성 (결정 #8) — 현재 클립들의 숫자 접미사 최댓값 + 1을 `c<n>`으로 파생한다.
+ * 난수·상태·카운터 없이 순수하다. 빈 집합이면 `c1`. 유일성은 주어진 클립 집합 안에서만 보장한다
+ * (UI 선택 식별 용도). validator의 합성 클립과 편집 연산이 공유한다.
+ */
+export function nextClipId(clips: Clip[]): string {
+  let max = 0
+  for (const c of clips) {
+    const m = /(\d+)$/.exec(c.id)
+    if (m) max = Math.max(max, Number(m[1]))
+  }
+  return `c${max + 1}`
 }
 
 /**
