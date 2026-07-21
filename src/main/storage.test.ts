@@ -40,7 +40,10 @@ const recipe: RenderRecipe = {
     keyframes: [{ t: 1000, x: 400, y: 300, cursor: 'arrow' }],
     clicks: [{ t: 1000, x: 400, y: 300 }],
     size: 1,
-    smoothingMs: 120
+    smoothingMs: 120,
+    hidden: false,
+    hideWhenIdle: false,
+    loopReturn: true
   },
   trim: { startMs: 250, endMs: 4750 },
   background: {

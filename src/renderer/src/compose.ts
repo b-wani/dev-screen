@@ -178,10 +178,15 @@ function drawCursor(
   click: FrameComposition['click'],
   map: Mapping
 ): void {
+  // 유휴 자동 숨김 페이드 — 완전히 투명하면 그리지 않는다.
+  if (cursor.opacity <= 0) return
   const cx = map.toCanvasX(cursor.x)
   const cy = map.toCanvasY(cursor.y)
   const press = click ? 1 - 0.2 * (1 - click.progress) : 1
+  ctx.save()
+  ctx.globalAlpha = cursor.opacity
   drawArrowCursor(ctx, cx, cy, 18 * cursor.size * map.drawScale * press)
+  ctx.restore()
 }
 
 /** 화살표 커서 벡터 하나. (tipX, tipY)가 커서 끝점. */

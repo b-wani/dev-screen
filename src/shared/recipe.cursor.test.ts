@@ -111,6 +111,142 @@ describe('프레임 샘플링: 클릭 하이라이트 (AC 2)', () => {
   })
 })
 
+function inlineTrack(durationMs: number, samples: EventTrack['samples']): EventTrack {
+  return { protocolVersion: 1, startedAt: 0, durationMs, samples }
+}
+
+describe('커서 완전 숨김 (hidden, #153)', () => {
+  const recipe = deriveRecipe(loadTrack('event-track-jitter.json'), { source })
+
+  it('유도한 레시피는 기본으로 숨김 OFF다', () => {
+    expect(recipe.cursor.hidden).toBe(false)
+    expect(sampleFrame(recipe, 250).cursor).not.toBeNull()
+  })
+
+  it('hidden이면 커서 샘플이 null이다 (그리기 층이 건너뛴다)', () => {
+    const hidden = { ...recipe, cursor: { ...recipe.cursor, hidden: true } }
+    expect(sampleFrame(hidden, 250).cursor).toBeNull()
+  })
+})
+
+describe('유휴 자동 숨김 (hideWhenIdle, #150)', () => {
+  // 커서가 t=100에 (50,0)으로 이동한 뒤 계속 정지. loopReturn은 끈 채 유휴 로직만 본다.
+  const base = deriveRecipe(
+    inlineTrack(10000, [
+      { t: 0, kind: 'move', x: 0, y: 0, cursor: 'arrow' },
+      { t: 100, kind: 'move', x: 50, y: 0, cursor: 'arrow' },
+      { t: 200, kind: 'move', x: 50, y: 0, cursor: 'arrow' }
+    ]),
+    { source }
+  )
+  const idle = { ...base, cursor: { ...base.cursor, hideWhenIdle: true, loopReturn: false } }
+
+  it('기본값은 OFF이고, OFF면 정지해도 완전 불투명하다', () => {
+    expect(base.cursor.hideWhenIdle).toBe(false)
+    const off = { ...base, cursor: { ...base.cursor, loopReturn: false } }
+    expect(sampleFrame(off, 5000).cursor!.opacity).toBe(1)
+  })
+
+  it('임계(1500ms) 전에는 완전 불투명하다', () => {
+    // 마지막 이동 t=100, 유휴 100ms < 1500ms.
+    expect(sampleFrame(idle, 200).cursor!.opacity).toBe(1)
+  })
+
+  it('임계+페이드아웃(400ms)이 지나면 완전히 사라진다 (opacity 0)', () => {
+    // 마지막 이동 t=100 → 1500+400 후 = t=2000.
+    expect(sampleFrame(idle, 2000).cursor!.opacity).toBe(0)
+  })
+
+  it('페이드아웃 중에는 1→0으로 단조 감소한다', () => {
+    const a = sampleFrame(idle, 1700).cursor!.opacity
+    const b = sampleFrame(idle, 1900).cursor!.opacity
+    expect(a).toBeGreaterThan(0)
+    expect(a).toBeLessThan(1)
+    expect(b).toBeLessThan(a)
+  })
+
+  it('다시 움직이면 페이드인(150ms)으로 되살아난다', () => {
+    const remove = deriveRecipe(
+      inlineTrack(10000, [
+        { t: 0, kind: 'move', x: 0, y: 0, cursor: 'arrow' },
+        { t: 100, kind: 'move', x: 50, y: 0, cursor: 'arrow' },
+        { t: 5000, kind: 'move', x: 300, y: 0, cursor: 'arrow' }
+      ]),
+      { source }
+    )
+    const r = { ...remove, cursor: { ...remove.cursor, hideWhenIdle: true, loopReturn: false } }
+    expect(sampleFrame(r, 5000).cursor!.opacity).toBeCloseTo(0, 6) // 이동 직전엔 숨어 있었다
+    const mid = sampleFrame(r, 5075).cursor!.opacity // 페이드인 절반
+    expect(mid).toBeGreaterThan(0)
+    expect(mid).toBeLessThan(1)
+    expect(sampleFrame(r, 5150).cursor!.opacity).toBe(1) // 페이드인 완료
+  })
+})
+
+describe('루프 초기위치 복귀 (loopReturn, #150)', () => {
+  // 스무딩 끔으로 좌표를 정확히 고정. 출력 [0,5000], 복귀 창 [4200,5000].
+  const recipe = deriveRecipe(
+    inlineTrack(5000, [
+      { t: 0, kind: 'move', x: 100, y: 100, cursor: 'arrow' },
+      { t: 2000, kind: 'move', x: 800, y: 600, cursor: 'arrow' },
+      { t: 4200, kind: 'move', x: 800, y: 600, cursor: 'arrow' }
+    ]),
+    { source }
+  )
+  const loop = { ...recipe, cursor: { ...recipe.cursor, smoothingMs: 0 } }
+
+  it('기본값은 ON이다', () => {
+    expect(recipe.cursor.loopReturn).toBe(true)
+  })
+
+  it('복귀 창 시작에서는 그 시점 위치, 끝에서는 시작(t=0) 좌표에 정확히 닿는다', () => {
+    const atStart = sampleFrame(loop, 4200).cursor!
+    expect(atStart.x).toBeCloseTo(800, 6)
+    expect(atStart.y).toBeCloseTo(600, 6)
+    const atEnd = sampleFrame(loop, 5000).cursor!
+    expect(atEnd.x).toBeCloseTo(100, 6)
+    expect(atEnd.y).toBeCloseTo(100, 6)
+  })
+
+  it('복귀 창 전에는 보간하지 않는다 (원래 위치 유지)', () => {
+    expect(sampleFrame(loop, 4000).cursor!.x).toBeCloseTo(800, 6)
+  })
+
+  it('OFF면 끝에서도 시작 좌표로 복귀하지 않는다', () => {
+    const off = { ...loop, cursor: { ...loop.cursor, loopReturn: false } }
+    expect(sampleFrame(off, 5000).cursor!.x).toBeCloseTo(800, 6)
+  })
+
+  it('출력 길이가 복귀 창(800ms)보다 짧으면 복귀하지 않는다', () => {
+    const shortR = deriveRecipe(
+      inlineTrack(500, [
+        { t: 0, kind: 'move', x: 100, y: 100, cursor: 'arrow' },
+        { t: 400, kind: 'move', x: 300, y: 300, cursor: 'arrow' }
+      ]),
+      { source }
+    )
+    const s = { ...shortR, cursor: { ...shortR.cursor, smoothingMs: 0 } }
+    expect(s.cursor.loopReturn).toBe(true)
+    expect(sampleFrame(s, 500).cursor!.x).toBeCloseTo(300, 6)
+  })
+
+  it('유휴 숨김으로 끝에서 숨은 상태면 복귀 시작과 함께 페이드인한다', () => {
+    const hiddenEnd = deriveRecipe(
+      inlineTrack(5000, [
+        { t: 0, kind: 'move', x: 100, y: 100, cursor: 'arrow' },
+        { t: 100, kind: 'move', x: 800, y: 600, cursor: 'arrow' }
+      ]),
+      { source }
+    )
+    const h = { ...hiddenEnd, cursor: { ...hiddenEnd.cursor, smoothingMs: 0, hideWhenIdle: true } }
+    // 복귀 창 시작(4200)엔 오래 정지해 숨어 있다 → opacity 0.
+    expect(sampleFrame(h, 4200).cursor!.opacity).toBeCloseTo(0, 6)
+    // 페이드인(150ms) 뒤 완전 불투명, 그리고 끝에서 시작 좌표로 복귀.
+    expect(sampleFrame(h, 4350).cursor!.opacity).toBe(1)
+    expect(sampleFrame(h, 5000).cursor!.x).toBeCloseTo(100, 6)
+  })
+})
+
 describe('프레임 샘플링: 카메라 변환은 sampleRecipe와 동일', () => {
   const recipe = deriveRecipe(loadTrack('event-track-clicks.json'), { source })
   it('camera 필드는 기존 카메라 샘플링 결과를 그대로 담는다', () => {
