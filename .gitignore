@@ -18,3 +18,6 @@ src/sidecar/.swiftpm/
 # Playwright E2E artifacts
 test-results/
 playwright-report/
+
+# Playwright MCP 스크래치 산출물(페이지 스냅샷·콘솔 로그)
+.playwright-mcp/
