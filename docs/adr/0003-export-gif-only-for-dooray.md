@@ -1,5 +1,7 @@
 # 익스포트 출력은 GIF 단일로 좁힌다 (Dooray 첨부용)
 
+> **Superseded by [0004](./0004-screen-studio-clone-as-goal.md)** — Screen Studio 모작 결정으로 MP4·GIF 듀얼 출력으로 복원됨.
+
 프로젝트 목적이 "NHN Dooray 업무에 첨부할 짧은 데모"로 좁혀지면서, export 출력 포맷을 재검토했다. 기존 v1은 GitHub 첨부 제한(영상 100MB / 이미지·GIF 10MB)을 타겟으로 MP4·GIF 두 포맷을 골라 내보냈고, 코드·용어(`GITHUB_PRESET`, `ExportFormat = 'mp4' | 'gif'`)가 GitHub·MP4에 묶여 있었다.
 
 Dooray 업무 본문은 GIF를 인라인으로 자동재생하고, 사용자가 호환성 때문에 GIF를 명시했다(WebP/APNG 배제). MP4는 본문 인라인 재생이 아니라 다운로드 첨부로만 성립해 "붙여넣으면 바로 움직이는 데모"라는 목적에 맞지 않는다. 그래서 **export 출력을 GIF 단일로 확정**하고, MP4 export 경로와 GitHub 명명을 코드·`CONTEXT.md`·온보딩 문구까지 전면 제거했다.
